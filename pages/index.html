@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>Thunderbird ADI Stats Test</title>
+
+  <style type="text/css">
+    body, html {
+      font-family: Helvetica,sans-serif;
+    }
+    #visualization {
+      margin: auto;
+      width: 80%;
+    }
+    h1, h2, p, #heroblock {
+      text-align: center;
+    }
+    h3 {
+      display: inline-block;
+    }
+  </style>
+
+  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.css">
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
+  <script type="text/javascript" charset="utf8" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.js"></script>
+  <script type="text/javascript" charset="utf8" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+</head>
+<body>
+  <div>
+    <h1 id="title">Active Daily Installations</h1>
+  </div>
+  <div id="visualization"></div>
+  <table id="adi" width="20%"></table><br>
+
+<script type="text/javascript">
+
+  function daily_adi(content) {
+    var adi = []
+    for (var key in content) {
+      adi.push({'x': key, 'y': content[key]['count']})
+    }
+    return adi;
+  }
+
+  function tablize(content) {
+    var adi = []
+    for (var key in content) {
+      adi.push([key, content[key]['count']])
+    }
+    return adi;
+  }
+
+  $.getJSON('thunderbird_adi.json', function(data) {
+    // DOM element where the Timeline will be attached
+    var container = document.getElementById('visualization');
+
+    var options = {
+        start: '2019-01-01',
+        end: '2019-02-17'
+    };
+    var adi = daily_adi(data);
+    var items = new vis.DataSet(adi);
+    var graph2d = new vis.Graph2d(container, items, options);
+
+    $('#adi').DataTable( {
+       "searching": true,
+       "bPaginate": false,
+       "bInfo" : false,
+       "order": [[0, "desc"]],
+        data: tablize(data),
+          columns: [
+            { title: "Date" },
+            { title: "ADI" },
+        ]
+    });
+  });
+</script>
+</body>
+</html>
