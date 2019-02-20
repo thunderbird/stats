@@ -21,10 +21,9 @@
   </style>
 
   <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.css">
-  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
   <script type="text/javascript" charset="utf8" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
   <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.js"></script>
-  <script type="text/javascript" charset="utf8" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <script type="text/javascript" charset="utf8" src="/js/highcharts.js"></script>
 </head>
 <body>
   <div>
@@ -38,30 +37,60 @@
   function daily_adi(content) {
     var adi = []
     for (var key in content) {
-      adi.push({'x': key, 'y': content[key]['count']})
+      adi.push([[key, content[key]['count']])
     }
     return adi;
   }
 
-  function tablize(content) {
-    var adi = []
-    for (var key in content) {
-      adi.push([key, content[key]['count']])
-    }
-    return adi;
-  }
 
   $.getJSON('thunderbird_adi.json', function(data) {
     // DOM element where the Timeline will be attached
     var container = document.getElementById('visualization');
 
-    var options = {
-        start: '2019-01-01',
-        end: '2019-02-17'
-    };
     var adi = daily_adi(data);
-    var items = new vis.DataSet(adi);
-    var graph2d = new vis.Graph2d(container, items, options);
+
+    Highcharts.chart('container', {
+      chart: {
+          type: 'spline'
+      },
+      title: {
+          text: 'Active Daily Installations'
+      },
+      subtitle: {
+          text: 'Irregular time data in Highcharts JS'
+      },
+      xAxis: {
+          type: 'datetime',
+          dateTimeLabelFormats: { // don't display the dummy year
+              month: '%e. %b',
+              year: '%b'
+          },
+          title: {
+              text: 'Date'
+          }
+      },
+      yAxis: {
+          title: {
+              text: 'Snow depth (m)'
+          },
+          min: 0
+      },
+      tooltip: {
+          headerFormat: '<b>{series.name}</b><br>',
+          pointFormat: '{point.x:%e. %b}: {point.y:.2f} m'
+      },
+
+      plotOptions: {
+          spline: {
+              marker: {
+                  enabled: true
+              }
+          }
+      },
+
+      colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
+      series: [{name: "ADI", data=adi}]
+    });
 
     $('#adi').DataTable( {
        "searching": true,
