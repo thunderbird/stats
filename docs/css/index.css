@@ -11,7 +11,6 @@ body {
 
 body {
   display: flex;
-  align-items: center;
   justify-content: center;
   padding: 40px;
   font: 14px/1.5 "Open Sans", sans-serif;
@@ -22,7 +21,8 @@ p:not(:last-child) {
   margin: 0 0 20px; }
 
 main {
-  max-width: 80%;
+  min-width: 80%;
+  max-width: 90%;
   padding: 40px;
   border: 1px solid rgba(0, 0, 0, 0.2);
   background: #fff;
@@ -33,7 +33,7 @@ section {
   padding: 20px 0 0;
   border-top: 1px solid #abc; }
 
-input {
+input[type="radio"] {
   display: none; }
 
 label {
