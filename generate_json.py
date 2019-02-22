@@ -9,7 +9,7 @@ s3_bucket = 'versioncheck-athena-results'
 file_dir = 'amo_stats/update_counts_by_version'
 file_name = '000000_0'
 start_date = datetime.date(2019, 1, 1)
-outfile_name = 'thunderbird_adi.json'
+outfile_name = 'docs/thunderbird_adi.json'
 
 def parse_s3_data(date):
     s3 = boto3.resource('s3')
