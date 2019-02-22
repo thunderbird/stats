@@ -45,8 +45,10 @@ label {
   color: #abc;
   border: 1px solid transparent; }
 
+#stats_title {
+  text-align: center; }
+
 label:before {
-  font-family: fontawesome;
   font-weight: normal;
   margin-right: 10px; }
 
