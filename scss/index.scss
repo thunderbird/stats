@@ -1,3 +1,5 @@
+@import "./fira-sans.scss";
+
 *,
 *::before,
 *::after {
@@ -13,7 +15,7 @@ body {
   display: flex;
   justify-content: center;
   padding: 40px;
-  font: 14px/1.5 "Open Sans", sans-serif;
+  font: 14px/1.5 "Fira Sans", sans-serif;
   color: #345;
   background: #f0f2f4;
 }
