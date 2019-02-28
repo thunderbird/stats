@@ -1,4 +1,5 @@
 @import "./fira-sans.scss";
+@import url('https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css');
 
 *,
 *::before,
@@ -56,22 +57,18 @@ label {
 #stats_title {
   text-align: center;
 }
+
 label:before {
+  font-family: fontawesome;
   font-weight: normal;
   margin-right: 10px;
 }
 
 label[for*="1"]:before {
-  content: "\f1cb";
+  content: "\f0c0";
 }
 label[for*="2"]:before {
-  content: "\f17d";
-}
-label[for*="3"]:before {
-  content: "\f16c";
-}
-label[for*="4"]:before {
-  content: "\f171";
+  content: "\f295";
 }
 
 label:hover {
