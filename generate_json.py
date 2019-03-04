@@ -56,7 +56,6 @@ def parse_s3_data(date):
 
 
 daterange = datetime.date.today() - start_date
-
 data = {}
 
 for d in range(daterange.days):
