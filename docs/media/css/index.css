@@ -53,10 +53,6 @@
   padding: 0;
   box-sizing: border-box; }
 
-html,
-body {
-  height: 100vh; }
-
 body {
   display: flex;
   justify-content: center;
@@ -119,9 +115,7 @@ input:checked + label {
   border-bottom: 1px solid #fff; }
 
 #tab1:checked ~ #content1,
-#tab2:checked ~ #content2,
-#tab3:checked ~ #content3,
-#tab4:checked ~ #content4 {
+#tab2:checked ~ #content2 {
   display: block; }
 
 @media screen and (max-width: 1200px) {
