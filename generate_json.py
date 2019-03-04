@@ -8,7 +8,7 @@ theme_guid = '{972ce4c6-7e08-4474-a285-3208198ce6fd}'
 s3_bucket = 'versioncheck-athena-results'
 file_dir = 'amo_stats/update_counts_by_version'
 file_name = '000000_0'
-start_date = datetime.date(2019, 1, 1)
+start_date = datetime.date(2018, 8, 1)
 outfile_name = 'docs/thunderbird_adi.json'
 
 def parse_s3_data(date):
