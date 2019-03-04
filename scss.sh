@@ -1,3 +1,3 @@
 #!/bin/bash
 
-pysassc scss/index.scss docs/css/index.css
+pysassc scss/index.scss docs/media/css/index.css

@@ -1,5 +1,4 @@
 @import "./fira-sans.scss";
-@import url('https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css');
 
 *,
 *::before,
@@ -59,9 +58,10 @@ label {
 }
 
 label:before {
-  font-family: fontawesome;
+  font-family: 'Font Awesome\ 5 Free';
   font-weight: normal;
   margin-right: 10px;
+  font-weight: 900;
 }
 
 label[for*="1"]:before {
