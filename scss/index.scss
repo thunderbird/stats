@@ -21,6 +21,10 @@ p:not(:last-child) {
   margin: 0 0 20px;
 }
 
+.center {
+  text-align: center;
+}
+
 main {
   min-width: 80%;
   max-width: 90%;
@@ -48,10 +52,6 @@ label {
   text-align: center;
   color: #abc;
   border: 1px solid transparent;
-}
-
-#stats_title {
-  text-align: center;
 }
 
 label:before {
