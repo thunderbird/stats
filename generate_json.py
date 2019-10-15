@@ -4,12 +4,12 @@ import datetime
 import json
 import os
 
-
 start_date = datetime.date(2018, 8, 1)
 s3_bucket = 'versioncheck-athena-results'
 outfile_name = 'docs/thunderbird_adi.json'
 
 main_dir = 'amo_stats'
+dir68 = 'aus_stats'
 file_dir = main_dir + '/update_counts_by_version'
 apps_dir = main_dir + '/update_counts_by_app'
 file_name = '000000_0'
@@ -41,6 +41,20 @@ def make_reader(fdir, date):
     reader = csv.reader(data, delimiter='\t')
     return reader
 
+
+def s3_json_read(date):
+    s3 = boto3.resource('s3')
+    filename = date + '.json'
+    input_dir = '/'.join([dir68, filename])
+    infile = s3.Object(s3_bucket, input_dir)
+    try:
+        data = infile.get()['Body'].read().splitlines(False)
+    except s3.meta.client.exceptions.NoSuchKey:
+        return {}
+    else:
+        return json.loads(data[0])
+
+
 def sm_versions():
     """Returns a set() of Seamonkey versions using the SM guid to filter them out of final data."""
     yesterday = (datetime.date.today() - datetime.timedelta(1)).strftime('%Y-%m-%d')
@@ -56,6 +70,7 @@ seamonkeys = sm_versions()
 def parse_s3_data(date):
     """Parses S3 stored data for a specific date and returns it ready to be exported. """
     reader = make_reader(file_dir, date)
+    jsondata = s3_json_read(date)
 
     sum = 0
     version_data = {}
@@ -66,6 +81,10 @@ def parse_s3_data(date):
             else:
                 version_data[row[2]] = int(row[3])
             sum += int(row[3])
+
+    if jsondata:
+        version_data.update(jsondata['versions'])
+        sum += int(jsondata['count'])
 
     parsed_data = {'count': sum, 'versions': version_data}
 
