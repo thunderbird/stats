@@ -118,7 +118,7 @@ $.getJSON('thunderbird_adi.json', function(data) {
         data: adi['table'],
             columns: [
                 { title: "Date" },
-                { title: "ADI" },
+                { title: "ADI", render: $.fn.dataTable.render.number(',','.') },
             ]
     });
 
