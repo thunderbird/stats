@@ -33,21 +33,12 @@ function format_adi_data(content) {
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
 
-    Highcharts.chart('line_adi', {
-        chart: {
-                type: 'spline'
-        },
+    Highcharts.stockChart('line_adi', {
         title: {
                 text: 'Active Daily Installations'
         },
-        rangeSelector:{
-            enabled:true
-        },
         xAxis: {
                 type: 'datetime',
-                title: {
-                        text: 'Date'
-                }
         },
         yAxis: {
                 title: {
@@ -57,19 +48,29 @@ $.getJSON('thunderbird_adi.json', function(data) {
         },
         tooltip: {
                 headerFormat: '<b>{series.name}</b><br>',
-                pointFormat: '{point.x:%A %e %b}: {point.y} users.'
+                pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+        },
+
+        legend: {
+            enabled: true
         },
 
         plotOptions: {
-                spline: {
-                        marker: {
-                                enabled: true
-                        }
-                }
+            series: {
+                showInLegend: true
+            }
+        },
+
+        navigator: {
+            enabled: false
+        },
+
+        scrollbar: {
+            enabled: false
         },
 
         colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
-        series: [{name: "ADI", data: adi['graph']}]
+        series: [{name: "ADI", id: "adi", data: adi['graph']}, {type: "sma", linkedTo: "adi", params: { period: 7 }},]
     });
 
     Highcharts.chart('areaspline_versions', {
