@@ -125,3 +125,45 @@ $.getJSON('thunderbird_adi.json', function(data) {
 
     $(".dataTables_wrapper").css("width","25%").css("margin", "0 auto");
 });
+
+$.getJSON('thunderbird_aggregate.json', function(data) {
+    var adi = format_adi_data(data);
+
+    Highcharts.chart('aggregate_versions', {
+        chart: {
+            type: 'areaspline'
+        },
+        title: {
+            text: 'Aggregated Major Versions as % of ADI'
+        },
+        rangeSelector:{
+            enabled:true
+        },
+        xAxis: {
+            type: 'datetime',
+            title: {
+                 text: 'Date'
+            }
+        },
+        yAxis: {
+            title: {
+                text: '# of Installations'
+            },
+            min: 0
+        },
+        tooltip: {
+            valueDecimals: 2,
+            headerFormat: '<b>{series.name}</b><br>',
+            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
+        },
+
+        plotOptions: {
+            spline: {
+                marker: {
+                    enabled: true
+                }
+            }
+        },
+        series: adi['top10']
+    });
+});
