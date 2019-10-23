@@ -90,6 +90,54 @@ def parse_s3_data(date):
 
     return parsed_data
 
+
+def aggregate_versions(record, vmin, vmax):
+    """ Aggregates versions in record by vmin and vmax. Versions below vmin will all
+    be included in a single data point. Versions equal"""
+    majors = {}
+    total = 0
+
+    for version, count in record['versions'].iteritems():
+        major = version.split('.')[0]
+        try:
+            # Aggregate all versions below vmin into one data point.
+            if int(major) <= vmin:
+                majors[str(vmin)] = majors.get(str(vmin), 0) + int(count)
+            # Don't aggregate vmax at all, allow minor versions to pass through.
+            elif int(major) == vmax:
+                majors[version] = count
+            # Also aggregate versions above vmin that aren't vmax.
+            else:
+                majors[major] = majors.get(major, 0) + int(count)
+        except ValueError:
+            pass
+
+    # Prune data points that have less than 1/1000th(0.1%) of users to clean up graph,
+    # this is usually random old beta versions. Also adjust total accordingly so we
+    # still sum to 100%.
+    pruned = {}
+    for version, count in majors.iteritems():
+        if int(version.split('.')[0]) <= vmax and count > int(record['count']/1000):
+            pruned[version] = count
+            total += int(count)
+
+    pruned[str(vmin) + ' and below'] = pruned.pop(str(vmin))
+
+    aggregate = {}
+    aggregate['count'] = total
+    aggregate['versions'] = pruned
+    return aggregate
+
+
+def build_aggregate(jsondata, vmin, vmax):
+    aggregate = {}
+    outfile_name = "docs/{vmax}uptake.json".format(vmax=vmax)
+    for key in jsondata.keys():
+        aggregate[key] = aggregate_versions(jsondata[key], vmin, vmax)
+    with open(outfile_name, 'w') as outfile:
+        json.dump(aggregate, outfile)
+
+
 data = parse_cached_json()
 if data['start_date']:
     start_date = data['start_date']
@@ -102,5 +150,7 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print daystring
 
+build_aggregate(data['json'], 38, 68)
+build_aggregate(data['json'], 38, 60)
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)

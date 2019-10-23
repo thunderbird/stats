@@ -70,7 +70,7 @@ $.getJSON('thunderbird_adi.json', function(data) {
         },
 
         colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
-        series: [{name: "ADI", id: "adi", data: adi['graph']}, {type: "sma", linkedTo: "adi", params: { period: 7 }},]
+        series: [{name: "ADI", id: "adi", data: adi['graph']}, {name: "7-day Moving Average", type: "sma", linkedTo: "adi", params: { period: 7 }},]
     });
 
     Highcharts.chart('areaspline_versions', {
@@ -126,7 +126,7 @@ $.getJSON('thunderbird_adi.json', function(data) {
     $(".dataTables_wrapper").css("width","25%").css("margin", "0 auto");
 });
 
-$.getJSON('thunderbird_aggregate.json', function(data) {
+$.getJSON('68uptake.json', function(data) {
     var adi = format_adi_data(data);
 
     Highcharts.chart('aggregate_versions', {
