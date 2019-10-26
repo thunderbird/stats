@@ -13,10 +13,10 @@ function format_adi_data(content) {
     // to use as index for last available day's data.
     lastday = new Date(adi['graph'][adi['graph'].length-1][0]).toISOString().substring(0,10);
     // Sort versions by # of users descending.
-    let top10 = Object.entries(content[lastday]['versions']).sort((a, b) => b[1] - a[1]).slice(0,10);
-    adi['top10'] = [];
-    // Build an object with arrays showing all historical data for each of the top 5 versions from the last day.
-    for (let version of top10) {
+    let uptake = Object.entries(content[lastday]['versions']).sort((a, b) => b[1] - a[1]);
+    adi['uptake'] = [];
+    // Build an object with arrays showing percentage of users for each version relative to total.
+    for (let version of uptake) {
         let series = {name: version[0], data: []};
         for (let k in content) {
             date = new Date(k);
@@ -24,7 +24,7 @@ function format_adi_data(content) {
             series['data'].push([date.getTime(), percent]);
         }
         series['data'] = series['data'].sort((a, b) => a[0] - b[0]);
-        adi['top10'].push(series);
+        adi['uptake'].push(series);
     }
     return adi;
 }
@@ -69,46 +69,12 @@ $.getJSON('thunderbird_adi.json', function(data) {
             enabled: false
         },
 
+        rangeSelector: {
+            selected: 4
+        },
+
         colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
         series: [{name: "ADI", id: "adi", data: adi['graph']}, {name: "7-day Moving Average", type: "sma", linkedTo: "adi", params: { period: 7 }},]
-    });
-
-    Highcharts.chart('areaspline_versions', {
-        chart: {
-            type: 'areaspline'
-        },
-        title: {
-            text: 'Top 10 Versions by ADI'
-        },
-        rangeSelector:{
-            enabled:true
-        },
-        xAxis: {
-            type: 'datetime',
-            title: {
-                 text: 'Date'
-            }
-        },
-        yAxis: {
-            title: {
-                text: '# of Installations'
-            },
-            min: 0
-        },
-        tooltip: {
-            valueDecimals: 2,
-            headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
-        },
-
-        plotOptions: {
-            spline: {
-                marker: {
-                    enabled: true
-                }
-            }
-        },
-        series: adi['top10']
     });
 
     $('#adi').DataTable( {
@@ -129,12 +95,12 @@ $.getJSON('thunderbird_adi.json', function(data) {
 $.getJSON('68uptake.json', function(data) {
     var adi = format_adi_data(data);
 
-    Highcharts.chart('aggregate_versions', {
+    Highcharts.chart('68uptake', {
         chart: {
             type: 'areaspline'
         },
         title: {
-            text: 'Aggregated Major Versions as % of ADI'
+            text: 'TB68 Uptake as % of ADI'
         },
         rangeSelector:{
             enabled:true
@@ -164,6 +130,48 @@ $.getJSON('68uptake.json', function(data) {
                 }
             }
         },
-        series: adi['top10']
+        series: adi['uptake']
+    });
+});
+
+$.getJSON('60uptake.json', function(data) {
+    var adi = format_adi_data(data);
+
+    Highcharts.chart('60uptake', {
+        chart: {
+            type: 'areaspline'
+        },
+        title: {
+            text: 'Historical TB60 Uptake (ignoring 68)'
+        },
+        rangeSelector:{
+            enabled:true
+        },
+        xAxis: {
+            type: 'datetime',
+            title: {
+                 text: 'Date'
+            }
+        },
+        yAxis: {
+            title: {
+                text: '# of Installations'
+            },
+            min: 0
+        },
+        tooltip: {
+            valueDecimals: 2,
+            headerFormat: '<b>{series.name}</b><br>',
+            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
+        },
+
+        plotOptions: {
+            spline: {
+                marker: {
+                    enabled: true
+                }
+            }
+        },
+        series: adi['uptake']
     });
 });
