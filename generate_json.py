@@ -5,8 +5,14 @@ import json
 import os
 
 start_date = datetime.date(2018, 8, 1)
+today = datetime.date(2019, 10, 27)
+# First day with data for 68
+start68 = datetime.date(2019,9,3)
+yesterday = (today - datetime.timedelta(1)).strftime('%Y-%m-%d')
+
 s3_bucket = 'versioncheck-athena-results'
 outfile_name = 'docs/thunderbird_adi.json'
+beta_outfile_name = 'docs/beta_nightly_adi.json'
 
 main_dir = 'amo_stats'
 dir68 = 'aus_stats'
@@ -57,7 +63,6 @@ def s3_json_read(date):
 
 def sm_versions():
     """Returns a set() of Seamonkey versions using the SM guid to filter them out of final data."""
-    yesterday = (datetime.date.today() - datetime.timedelta(1)).strftime('%Y-%m-%d')
     reader = make_reader(apps_dir, yesterday)
     versions = set()
     for row in reader:
@@ -138,11 +143,40 @@ def build_aggregate(jsondata, vmin, vmax):
         json.dump(aggregate, outfile)
 
 
+def build_beta_aggregate(jsondata, vrelease):
+    aggregate = {}
+    for key in jsondata.keys():
+        keydate = datetime.datetime.strptime(key, "%Y-%m-%d").date()
+        if keydate < start68:
+            continue
+        majors = {}
+        total = 0
+        for version, count in jsondata[key]['versions'].iteritems():
+            major = version.split('.')[0]
+            try:
+                # Aggregate all versions below vmin into one data point.
+                if int(major) > vrelease:
+                    majors[version] = majors.get(version, 0) + int(count)
+                elif 'a1' in version and int(major) > vrelease:
+                    majors[version] = majors.get(version, 0) + int(count)
+            except ValueError:
+                pass
+        for version, count in majors.iteritems():
+            total += int(count)
+
+        aggregate[key] = {}
+        aggregate[key]['count'] = total
+        aggregate[key]['versions'] = majors
+
+    with open(beta_outfile_name, 'w') as outfile:
+        json.dump(aggregate, outfile)
+
+
 data = parse_cached_json()
 if data['start_date']:
     start_date = data['start_date']
 
-daterange = datetime.date.today() - start_date
+daterange = today - start_date
 
 for d in range(daterange.days):
     daystring = (start_date + datetime.timedelta(d)).strftime("%Y-%m-%d")
@@ -152,5 +186,6 @@ for d in range(daterange.days):
 
 build_aggregate(data['json'], 38, 68)
 build_aggregate(data['json'], 38, 60)
+build_beta_aggregate(data['json'], 68)
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
