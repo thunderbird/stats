@@ -29,13 +29,43 @@ function format_adi_data(content) {
     return adi;
 }
 
+function format_beta_adi(content) {
+    let adi = {};
+    adi['graph'] = [];
+    adi['table'] = [];
+    for (var key in content) {
+        date = new Date(key);
+        adi['graph'].push([date.getTime(), content[key]['count']]);
+        adi['table'].push([key, content[key]['count']]);
+
+    }
+    adi['graph'] = adi['graph'].sort((a, b) => a[0] - b[0]);
+
+    lastday = new Date(adi['graph'][adi['graph'].length-1][0]).toISOString().substring(0,10);
+
+    // Sort versions by # of users descending.
+    let betas = Object.entries(content[lastday]['versions']).sort((a, b) => b[1] - a[1]);
+    adi['betas'] = [];
+    // Build an object with arrays showing percentage of users for each version relative to total.
+    for (let version of betas) {
+        let series = {name: version[0], data: []};
+        for (let k in content) {
+            date = new Date(k);
+            series['data'].push([date.getTime(), content[k]['versions'][version[0]]]);
+        }
+        series['data'] = series['data'].sort((a, b) => a[0] - b[0]);
+        adi['betas'].push(series);
+    }
+    return adi;
+}
+
 
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
 
     Highcharts.stockChart('line_adi', {
         title: {
-                text: 'Active Daily Installations'
+                text: 'Active Daily Installations for Release channel'
         },
         xAxis: {
                 type: 'datetime',
@@ -90,6 +120,54 @@ $.getJSON('thunderbird_adi.json', function(data) {
     });
 
     $(".dataTables_wrapper").css("width","25%").css("margin", "0 auto");
+});
+
+$.getJSON('beta_nightly_adi.json', function(data) {
+    var adi = format_beta_adi(data);
+
+    Highcharts.stockChart('line_beta_adi', {
+        title: {
+                text: 'Active Beta and Nightly Installations after 68'
+        },
+        xAxis: {
+                type: 'datetime',
+        },
+        yAxis: {
+                title: {
+                        text: '# of Installations'
+                },
+                min: 0
+        },
+        tooltip: {
+                headerFormat: '<b>{series.name}</b><br>',
+                pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+        },
+
+        legend: {
+            enabled: true
+        },
+
+        plotOptions: {
+            series: {
+                showInLegend: true
+            }
+        },
+
+        navigator: {
+            enabled: false
+        },
+
+        scrollbar: {
+            enabled: false
+        },
+
+        rangeSelector: {
+            selected: 4
+        },
+
+        colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
+        series: adi['betas']
+    });
 });
 
 $.getJSON('68uptake.json', function(data) {
