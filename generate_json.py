@@ -5,9 +5,9 @@ import json
 import os
 
 start_date = datetime.date(2018, 8, 1)
-today = datetime.date(2019, 10, 27)
-# First day with data for 68
+# First day with data for 68.
 start68 = datetime.date(2019,9,3)
+today = datetime.date.today()
 yesterday = (today - datetime.timedelta(1)).strftime('%Y-%m-%d')
 
 s3_bucket = 'versioncheck-athena-results'

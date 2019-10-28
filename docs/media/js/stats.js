@@ -1,3 +1,23 @@
+$( document ).ready(function() {
+// Yeah all of this is a horrible hack just to make the tabs linkable.
+    $("#beta").click(function() {
+        $("#tab2").prop('checked', true);
+    });
+
+    $("#version").click(function() {
+        $("#tab3").prop('checked', true);
+    });
+
+    if (window.location.hash == '#beta') {
+        $("#tab2").prop('checked', true);
+
+    }
+    else if (window.location.hash == '#version') {
+        $("#tab3").prop('checked', true);
+    }
+
+});
+
 function format_adi_data(content) {
     let adi = {};
     adi['graph'] = [];

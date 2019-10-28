@@ -102,6 +102,9 @@ label[for*="1"]:before {
   content: "\f0c0"; }
 
 label[for*="2"]:before {
+  content: "\f0c0"; }
+
+label[for*="3"]:before {
   content: "\f295"; }
 
 label:hover {
@@ -115,7 +118,8 @@ input:checked + label {
   border-bottom: 1px solid #fff; }
 
 #tab1:checked ~ #content1,
-#tab2:checked ~ #content2 {
+#tab2:checked ~ #content2,
+#tab3:checked ~ #content3 {
   display: block; }
 
 @media screen and (max-width: 1200px) {
