@@ -2,7 +2,6 @@ $( document ).ready(function() {
     // Yeah all of this is a horrible hack just to make the tabs linkable.
     if (window.location.hash == '#beta') {
         $("#tab2").prop('checked', true);
-
     }
     else if (window.location.hash == '#version') {
         $("#tab3").prop('checked', true);
@@ -10,6 +9,10 @@ $( document ).ready(function() {
     else {
         $("#tab1").prop('checked', true);
     }
+
+    $("#default").click(function() {
+        $("#tab1").prop('checked', true);
+    });
 
     $("#beta").click(function() {
         $("#tab2").prop('checked', true);
