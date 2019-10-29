@@ -103,6 +103,7 @@ $.getJSON('thunderbird_adi.json', function(data) {
                 min: 0
         },
         tooltip: {
+                valueDecimals: 0,
                 headerFormat: '<b>{series.name}</b><br>',
                 pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
         },
@@ -278,4 +279,10 @@ $.getJSON('60uptake.json', function(data) {
         },
         series: adi['uptake']
     });
+});
+
+Highcharts.setOptions({
+    lang: {
+        thousandsSep: ','
+    }
 });
