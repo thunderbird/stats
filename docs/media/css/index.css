@@ -68,8 +68,8 @@ p:not(:last-child) {
   text-align: center; }
 
 main {
-  min-width: 80%;
-  max-width: 90%;
+  min-width: 90%;
+  max-width: 100%;
   padding: 40px;
   border: 1px solid rgba(0, 0, 0, 0.2);
   background: #fff;
