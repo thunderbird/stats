@@ -10,15 +10,15 @@ $( document ).ready(function() {
         $("#tab1").prop('checked', true);
     }
 
-    $("#default").click(function() {
+    $("#default_tab").click(function() {
         $("#tab1").prop('checked', true);
     });
 
-    $("#beta").click(function() {
+    $("#beta_tab").click(function() {
         $("#tab2").prop('checked', true);
     });
 
-    $("#version").click(function() {
+    $("#version_tab").click(function() {
         $("#tab3").prop('checked', true);
     });
 
