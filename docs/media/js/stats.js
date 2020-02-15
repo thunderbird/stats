@@ -85,6 +85,23 @@ function format_beta_adi(content) {
     return adi;
 }
 
+function format_addon_stats(content) {
+    let data = [];
+    data[0] = {'data':[], 'name': 'Total Users'}
+    data[1] = {'data':[], 'name': 'Addon Users'}
+    data[2] = {'data':[], 'name': 'Users of Addons not in Top10'}
+    for (var key in content) {
+        date = new Date(key);
+        data[0]['data'].push([date.getTime(), content[key]['total']]);
+        data[1]['data'].push([date.getTime(), content[key]['addon_count']]);
+        data[2]['data'].push([date.getTime(), content[key]['minustop10_count']]);
+    }
+    data[0]['data'] = data[0]['data'].sort((a, b) => a[0] - b[0]);
+    data[1]['data'] = data[1]['data'].sort((a, b) => a[0] - b[0]);
+    data[2]['data'] = data[2]['data'].sort((a, b) => a[0] - b[0]);
+
+    return data;
+}
 
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
@@ -278,6 +295,55 @@ $.getJSON('60uptake.json', function(data) {
             }
         },
         series: adi['uptake']
+    });
+});
+
+$.getJSON('addon_stats.json', function(data) {
+    var adi = format_addon_stats(data);
+
+    Highcharts.stockChart('addon_stats', {
+        title: {
+                text: 'Addon Users Relative to Total Users'
+        },
+        xAxis: {
+                type: 'datetime',
+        },
+        yAxis: {
+                title: {
+                        text: '# of Installations'
+                },
+                min: 0
+        },
+        tooltip: {
+                valueDecimals: 0,
+                headerFormat: '<b>{series.name}</b><br>',
+                pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+        },
+
+        legend: {
+            enabled: true
+        },
+
+        plotOptions: {
+            series: {
+                showInLegend: true
+            }
+        },
+
+        navigator: {
+            enabled: false
+        },
+
+        scrollbar: {
+            enabled: false
+        },
+
+        rangeSelector: {
+            selected: 4
+        },
+
+        colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
+        series: adi
     });
 });
 
