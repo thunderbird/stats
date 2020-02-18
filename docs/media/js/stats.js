@@ -6,6 +6,9 @@ $( document ).ready(function() {
     else if (window.location.hash == '#version') {
         $("#tab3").prop('checked', true);
     }
+    else if (window.location.hash == '#addons') {
+        $("#tab4").prop('checked', true);
+    }
     else {
         $("#tab1").prop('checked', true);
     }
@@ -22,6 +25,9 @@ $( document ).ready(function() {
         $("#tab3").prop('checked', true);
     });
 
+    $("#addons_tab").click(function() {
+        $("#tab4").prop('checked', true);
+    });
 });
 
 function format_adi_data(content) {
@@ -232,7 +238,7 @@ $.getJSON('68uptake.json', function(data) {
         },
         yAxis: {
             title: {
-                text: '# of Installations'
+                text: '% of Installations'
             },
             min: 0
         },
@@ -274,7 +280,7 @@ $.getJSON('60uptake.json', function(data) {
         },
         yAxis: {
             title: {
-                text: '# of Installations'
+                text: '% of Installations'
             },
             min: 0
         },
