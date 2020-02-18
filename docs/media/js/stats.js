@@ -87,18 +87,15 @@ function format_beta_adi(content) {
 
 function format_addon_stats(content) {
     let data = [];
-    data[0] = {'data':[], 'name': 'Total Users'}
-    data[1] = {'data':[], 'name': 'Addon Users'}
-    data[2] = {'data':[], 'name': 'Users of Addons not in Top10'}
+    data[0] = {'data':[], 'name': 'User % of Total'}
+    data[1] = {'data':[], 'name': 'User % Except Top10 Add-ons'}
     for (var key in content) {
         date = new Date(key);
-        data[0]['data'].push([date.getTime(), content[key]['total']]);
-        data[1]['data'].push([date.getTime(), content[key]['addon_count']]);
-        data[2]['data'].push([date.getTime(), content[key]['minustop10_count']]);
+        data[0]['data'].push([date.getTime(), (content[key]['addon_count'] / content[key]['total']) * 100]);
+        data[1]['data'].push([date.getTime(), (content[key]['minustop10_count'] / content[key]['total']) * 100]);
     }
     data[0]['data'] = data[0]['data'].sort((a, b) => a[0] - b[0]);
     data[1]['data'] = data[1]['data'].sort((a, b) => a[0] - b[0]);
-    data[2]['data'] = data[2]['data'].sort((a, b) => a[0] - b[0]);
 
     return data;
 }
@@ -302,22 +299,26 @@ $.getJSON('addon_stats.json', function(data) {
     var adi = format_addon_stats(data);
 
     Highcharts.stockChart('addon_stats', {
+        chart: {
+            type: 'areaspline'
+        },
         title: {
-                text: 'Addon Users Relative to Total Users'
+            text: 'Addon Users as % of Total'
         },
         xAxis: {
-                type: 'datetime',
+            type: 'datetime',
         },
         yAxis: {
-                title: {
-                        text: '# of Installations'
-                },
-                min: 0
+            title: {
+                text: '% of Total Users'
+            },
+            min: 0,
+            max: 100
         },
         tooltip: {
-                valueDecimals: 0,
-                headerFormat: '<b>{series.name}</b><br>',
-                pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+            valueDecimals: 2,
+            headerFormat: '<b>{series.name}</b><br>',
+            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
         },
 
         legend: {
