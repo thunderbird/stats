@@ -23,11 +23,11 @@ theme_guid = '{972ce4c6-7e08-4474-a285-3208198ce6fd}'
 tb_guid = '{3550f703-e582-4d05-9a08-453d09bdfdc6}'
 sm_guid = '{92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}'
 
-def parse_cached_json():
+def parse_cached_json(filename):
     """Pull data from last JSON file if it exists, otherwise regenerate all data. """
     data = {}
     try:
-        with open(outfile_name, 'r') as infile:
+        with open(filename, 'r') as infile:
             data['json'] = json.load(infile)
             dates = list(data['json'].keys())
             dates = [datetime.datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
@@ -37,6 +37,7 @@ def parse_cached_json():
         data['start_date'] = None
         data['json'] = {}
     return data
+
 
 def make_reader(fdir, date):
     """Returns a csv reader object for a specific S3 path: fdir + date + file_name."""
@@ -172,7 +173,7 @@ def build_beta_aggregate(jsondata, vrelease):
         json.dump(aggregate, outfile)
 
 
-data = parse_cached_json()
+data = parse_cached_json(outfile_name)
 if data['start_date']:
     start_date = data['start_date']
 
@@ -189,3 +190,10 @@ build_aggregate(data['json'], 38, 60)
 build_beta_aggregate(data['json'], 68)
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
+
+addon_data = parse_cached_json('docs/addon_stats.json')
+for addon_daystring in addon_data['json'].keys():
+    addon_data['json'][addon_daystring]['total'] = data['json'][addon_daystring]['count']
+
+with open('docs/addon_stats.json', 'w') as outfile:
+    json.dump(addon_data['json'], outfile)
