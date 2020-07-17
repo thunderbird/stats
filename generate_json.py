@@ -7,6 +7,7 @@ import os
 start_date = datetime.date(2018, 8, 1)
 # First day with data for 68.
 start68 = datetime.date(2019,9,3)
+
 today = datetime.date.today()
 yesterday = (today - datetime.timedelta(1)).strftime('%Y-%m-%d')
 
@@ -187,7 +188,8 @@ for d in range(daterange.days):
 
 build_aggregate(data['json'], 38, 68)
 build_aggregate(data['json'], 38, 60)
-build_beta_aggregate(data['json'], 68)
+build_beta_aggregate(data['json'], 78)
+
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
 
