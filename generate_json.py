@@ -186,6 +186,7 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print daystring
 
+build_aggregate(data['json'], 38, 78)
 build_aggregate(data['json'], 38, 68)
 build_aggregate(data['json'], 38, 60)
 build_beta_aggregate(data['json'], 78)

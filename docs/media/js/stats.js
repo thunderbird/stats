@@ -106,6 +106,91 @@ function format_addon_stats(content) {
     return data;
 }
 
+adi_uptake_options = {
+    chart: {
+        type: 'areaspline'
+    },
+    rangeSelector:{
+        enabled:true
+    },
+    xAxis: {
+        type: 'datetime',
+        title: {
+             text: 'Date'
+        }
+    },
+    yAxis: {
+        title: {
+            text: '% of Installations'
+        },
+        min: 0
+    },
+    tooltip: {
+        valueDecimals: 2,
+        headerFormat: '<b>{series.name}</b><br>',
+        pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
+    },
+    plotOptions: {
+        spline: {
+            marker: {
+                enabled: true
+            }
+        },
+        series: {
+            showInLegend: true
+        }
+    },
+   legend: {
+        enabled: true
+    },
+    navigator: {
+        enabled: false
+    },
+    scrollbar: {
+        enabled: false
+    },
+}
+
+beta_adi_options = {
+    xAxis: {
+            type: 'datetime',
+    },
+    yAxis: {
+            title: {
+                    text: '# of Installations'
+            },
+            min: 0
+    },
+    tooltip: {
+            headerFormat: '<b>{series.name}</b><br>',
+            pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+    },
+
+    legend: {
+        enabled: true
+    },
+
+    plotOptions: {
+        series: {
+            showInLegend: true
+        }
+    },
+
+    navigator: {
+        enabled: false
+    },
+
+    scrollbar: {
+        enabled: false
+    },
+
+    rangeSelector: {
+        selected: 4
+    },
+
+    colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
+};
+
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
 
@@ -171,135 +256,46 @@ $.getJSON('thunderbird_adi.json', function(data) {
 
 $.getJSON('beta_nightly_adi.json', function(data) {
     var adi = format_beta_adi(data);
+    var opt = beta_adi_options
+    opt.series = adi['betas']
+    opt.title = {text: 'Active Beta and Nightly Installations after 78'};
+    Highcharts.stockChart('line_beta_adi', beta_adi_options);
+});
 
-    Highcharts.stockChart('line_beta_adi', {
-        title: {
-                text: 'Active Beta and Nightly Installations after 68'
-        },
-        xAxis: {
-                type: 'datetime',
-        },
-        yAxis: {
-                title: {
-                        text: '# of Installations'
-                },
-                min: 0
-        },
-        tooltip: {
-                headerFormat: '<b>{series.name}</b><br>',
-                pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
-        },
+$.getJSON('68beta_nightly_adi.json', function(data) {
+    var adi = format_beta_adi(data);
+    var opt = beta_adi_options
+    opt.series = adi['betas']
+    opt.title = {text: '69-78 Beta history'};
+    Highcharts.stockChart('68line_beta_adi', beta_adi_options);
+});
 
-        legend: {
-            enabled: true
-        },
-
-        plotOptions: {
-            series: {
-                showInLegend: true
-            }
-        },
-
-        navigator: {
-            enabled: false
-        },
-
-        scrollbar: {
-            enabled: false
-        },
-
-        rangeSelector: {
-            selected: 4
-        },
-
-        colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
-        series: adi['betas']
-    });
+$.getJSON('78uptake.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = adi_uptake_options
+    opt.series = adi['uptake']
+    opt.rangeSelector = {selected: 4};
+    opt.title = {text: 'TB78 Uptake as % of ADI'};
+    Highcharts.stockChart('78uptake', opt)
 });
 
 $.getJSON('68uptake.json', function(data) {
     var adi = format_adi_data(data);
-
-    Highcharts.chart('68uptake', {
-        chart: {
-            type: 'areaspline'
-        },
-        title: {
-            text: 'TB68 Uptake as % of ADI'
-        },
-        rangeSelector:{
-            enabled:true
-        },
-        xAxis: {
-            type: 'datetime',
-            title: {
-                 text: 'Date'
-            }
-        },
-        yAxis: {
-            title: {
-                text: '% of Installations'
-            },
-            min: 0
-        },
-        tooltip: {
-            valueDecimals: 2,
-            headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
-        },
-
-        plotOptions: {
-            spline: {
-                marker: {
-                    enabled: true
-                }
-            }
-        },
-        series: adi['uptake']
-    });
+    var opt = adi_uptake_options
+    opt.series = adi['uptake']
+    opt.rangeSelector = {selected: 4};
+    opt.title = {text: 'TB68 Uptake as % of ADI'};
+    Highcharts.stockChart('68uptake', opt)
 });
 
 $.getJSON('60uptake.json', function(data) {
     var adi = format_adi_data(data);
-
-    Highcharts.chart('60uptake', {
-        chart: {
-            type: 'areaspline'
-        },
-        title: {
-            text: 'Historical TB60 Uptake (ignoring 68)'
-        },
-        rangeSelector:{
-            enabled:true
-        },
-        xAxis: {
-            type: 'datetime',
-            title: {
-                 text: 'Date'
-            }
-        },
-        yAxis: {
-            title: {
-                text: '% of Installations'
-            },
-            min: 0
-        },
-        tooltip: {
-            valueDecimals: 2,
-            headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
-        },
-
-        plotOptions: {
-            spline: {
-                marker: {
-                    enabled: true
-                }
-            }
-        },
-        series: adi['uptake']
-    });
+    var opt = adi_uptake_options
+    opt.series = adi['uptake']
+    opt.title = {text: 'TB60 Uptake as % of ADI'};
+    Highcharts.stockChart('60uptake', opt)
 });
+
 
 $.getJSON('addon_stats.json', function(data) {
     var adi = format_addon_stats(data);
