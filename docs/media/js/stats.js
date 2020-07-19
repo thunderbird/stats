@@ -128,7 +128,7 @@ adi_uptake_options = {
     tooltip: {
         valueDecimals: 2,
         headerFormat: '<b>{series.name}</b><br>',
-        pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
+        pointFormat: '<b>{series.name}</b>: {point.x:%A %e %b}: {point.y}% of users.'
     },
     plotOptions: {
         spline: {
