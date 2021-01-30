@@ -9,9 +9,16 @@ $( document ).ready(function() {
     else if (window.location.hash == '#addons') {
         $("#tab4").prop('checked', true);
     }
+    else if (window.location.hash == '#ami') {
+        $("#tab0").prop('checked', true);
+    }
     else {
         $("#tab1").prop('checked', true);
     }
+
+    $("#ami_tab").click(function() {
+        $("#tab0").prop('checked', true);
+    });
 
     $("#default_tab").click(function() {
         $("#tab1").prop('checked', true);
@@ -29,6 +36,21 @@ $( document ).ready(function() {
         $("#tab4").prop('checked', true);
     });
 });
+
+function format_ami_data(content) {
+    let ami = {};
+    ami['graph'] = [];
+    ami['table'] = [];
+    for (var key in content) {
+        date = new Date(key);
+
+        count = (content[key]['ami'] / content[key]['78']) | 0;
+        ami['graph'].push([date.getTime(), count]);
+        ami['table'].push([key, count]);
+    }
+    ami['graph'] = ami['graph'].sort((a, b) => a[0] - b[0]);
+    return ami;
+}
 
 function format_adi_data(content) {
     let adi = {};
@@ -230,14 +252,35 @@ user_count_options = {
     scrollbar: {
         enabled: false
     },
+
 colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
 }
+
+$.getJSON('thunderbird_ami.json', function(data) {
+    var ami = format_ami_data(data);
+    var opt = user_count_options;
+    opt.series = [{name: "AMI", id: "ami", data: ami['graph']}];
+    opt.title = {text: 'Monthly Active Installations for Release channel'};
+    Highcharts.stockChart('line_ami', opt);
+    $('#ami').DataTable( {
+        "searching": true,
+        "bPaginate": true,
+        "bInfo" : false,
+        "order": [[0, "desc"]],
+        data: ami['table'],
+            columns: [
+                { title: "Date" },
+                { title: "AMI", render: $.fn.dataTable.render.number(',','.') },
+            ]
+    });
+    $(".dataTables_wrapper").css("width","25%").css("margin", "0 auto");
+});
 
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
     var opt = user_count_options;
     opt.series = [{name: "ADI", id: "adi", data: adi['graph']}, {name: "7-day Moving Average", type: "sma", linkedTo: "adi", params: { period: 7 }},];
-    opt.title = {text: 'Active Daily Installations for Release channel'};
+    opt.title = {text: 'Daily Active Installations for Release channel'};
     Highcharts.stockChart('line_adi', opt);
 
     $('#adi').DataTable( {

@@ -98,6 +98,9 @@ label:before {
   margin-right: 10px;
   font-weight: 900; }
 
+label[for*="0"]:before {
+  content: "\f0c0"; }
+
 label[for*="1"]:before {
   content: "\f0c0"; }
 
@@ -120,6 +123,7 @@ input:checked + label {
   border-top: 2px solid #0af;
   border-bottom: 1px solid #fff; }
 
+#tab0:checked ~ #content0,
 #tab1:checked ~ #content1,
 #tab2:checked ~ #content2,
 #tab3:checked ~ #content3,
