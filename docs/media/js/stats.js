@@ -259,6 +259,7 @@ colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
 $.getJSON('thunderbird_ami.json', function(data) {
     var ami = format_ami_data(data);
     var opt = user_count_options;
+    opt.chart.type = 'areaspline'
     opt.series = [{name: "AMI", id: "ami", data: ami['graph']}];
     opt.title = {text: 'Monthly Active Installations for Release channel'};
     Highcharts.stockChart('line_ami', opt);
@@ -279,6 +280,7 @@ $.getJSON('thunderbird_ami.json', function(data) {
 $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
     var opt = user_count_options;
+    opt.chart.type = 'line'
     opt.series = [{name: "ADI", id: "adi", data: adi['graph']}, {name: "7-day Moving Average", type: "sma", linkedTo: "adi", params: { period: 7 }},];
     opt.title = {text: 'Daily Active Installations for Release channel'};
     Highcharts.stockChart('line_adi', opt);
