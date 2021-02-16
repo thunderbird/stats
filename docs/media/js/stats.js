@@ -9,6 +9,9 @@ $( document ).ready(function() {
     else if (window.location.hash == '#addons') {
         $("#tab4").prop('checked', true);
     }
+    else if (window.location.hash == '#platlang') {
+        $("#tab5").prop('checked', true);
+    }
     else if (window.location.hash == '#ami') {
         $("#tab0").prop('checked', true);
     }
@@ -35,6 +38,11 @@ $( document ).ready(function() {
     $("#addons_tab").click(function() {
         $("#tab4").prop('checked', true);
     });
+
+    $("#platlang_tab").click(function() {
+        $("#tab5").prop('checked', true);
+    });
+
 });
 
 function format_ami_data(content) {
@@ -256,6 +264,53 @@ user_count_options = {
 colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
 }
 
+languages_options = {
+    chart: {
+        type: 'column'
+    },
+    rangeSelector:{
+        enabled:true,
+        selected: 4
+    },
+    xAxis: {
+        type: 'datetime',
+        title: {
+             text: 'Date'
+        }
+    },
+    yAxis: {
+        title: {
+            text: '# of Installations'
+        },
+        min: 0
+    },
+    tooltip: {
+        valueDecimals: 0,
+        headerFormat: '<b>{series.name}</b><br>',
+        pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true
+            }
+        },
+        series: {
+            showInLegend: true
+        }
+    },
+   legend: {
+        enabled: true
+    },
+    navigator: {
+        enabled: false
+    },
+    scrollbar: {
+        enabled: false
+    },
+}
+
 $.getJSON('thunderbird_ami.json', function(data) {
     var ami = format_ami_data(data);
     var opt = user_count_options;
@@ -339,6 +394,14 @@ $.getJSON('60uptake.json', function(data) {
     opt.series = adi['uptake'];
     opt.title = {text: 'TB60 Uptake as % of ADI'};
     Highcharts.stockChart('60uptake', opt)
+});
+
+$.getJSON('locales.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = languages_options;
+    opt.series = adi['uptake'];
+    opt.title = {text: '% users by locale'};
+    Highcharts.stockChart('languages', opt)
 });
 
 
