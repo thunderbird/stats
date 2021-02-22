@@ -266,6 +266,7 @@ colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
 
 languages_options = {
     chart: {
+        height: 750,
         type: 'column'
     },
     rangeSelector:{
@@ -280,20 +281,21 @@ languages_options = {
     },
     yAxis: {
         title: {
-            text: '# of Installations'
+            text: '% of Installations'
         },
         min: 0
     },
     tooltip: {
-        valueDecimals: 0,
+        valueDecimals: 2,
         headerFormat: '<b>{series.name}</b><br>',
-        pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+        pointFormat: '{series.name} {point.x:%A %e %b}: {point.y}%'
     },
     plotOptions: {
         column: {
             stacking: 'normal',
             dataLabels: {
-                enabled: true
+                enabled: true,
+                format: '{point.y:.2f}%'
             }
         },
         series: {
@@ -399,8 +401,8 @@ $.getJSON('60uptake.json', function(data) {
 $.getJSON('locales.json', function(data) {
     var adi = format_adi_data(data);
     var opt = languages_options;
-    opt.series = adi['uptake'];
-    opt.title = {text: '% users by locale'};
+    opt.series = adi['uptake'].slice(0, 11);
+    opt.title = {text: '% users in Top 10 Locales'};
     Highcharts.stockChart('languages', opt)
 });
 
