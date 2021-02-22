@@ -402,7 +402,7 @@ $.getJSON('locales.json', function(data) {
     var adi = format_adi_data(data);
     var opt = languages_options;
     opt.series = adi['uptake'].slice(0, 11);
-    opt.title = {text: '% users in Top 10 Locales'};
+    opt.title = {text: '% Installations in Top 10 Locales'};
     Highcharts.stockChart('languages', opt)
 });
 
