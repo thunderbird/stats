@@ -1,48 +1,17 @@
 $( document ).ready(function() {
     // Yeah all of this is a horrible hack just to make the tabs linkable.
-    if (window.location.hash == '#beta') {
-        $("#tab2").prop('checked', true);
+    let tabs = ["ami", "default", "beta", "version", "addons", "platlang"];
+
+    $("#tab1").prop('checked', true);
+    for (let i in tabs) {
+        if (window.location.hash == "#" + tabs[i]) {
+            $("#tab"+i).prop('checked', true);
+        }
+
+        $("#" + tabs[i] +"_tab").click(function() {
+            $("#tab"+i).prop('checked', true);
+        });
     }
-    else if (window.location.hash == '#version') {
-        $("#tab3").prop('checked', true);
-    }
-    else if (window.location.hash == '#addons') {
-        $("#tab4").prop('checked', true);
-    }
-    else if (window.location.hash == '#platlang') {
-        $("#tab5").prop('checked', true);
-    }
-    else if (window.location.hash == '#ami') {
-        $("#tab0").prop('checked', true);
-    }
-    else {
-        $("#tab1").prop('checked', true);
-    }
-
-    $("#ami_tab").click(function() {
-        $("#tab0").prop('checked', true);
-    });
-
-    $("#default_tab").click(function() {
-        $("#tab1").prop('checked', true);
-    });
-
-    $("#beta_tab").click(function() {
-        $("#tab2").prop('checked', true);
-    });
-
-    $("#version_tab").click(function() {
-        $("#tab3").prop('checked', true);
-    });
-
-    $("#addons_tab").click(function() {
-        $("#tab4").prop('checked', true);
-    });
-
-    $("#platlang_tab").click(function() {
-        $("#tab5").prop('checked', true);
-    });
-
 });
 
 function format_ami_data(content) {
@@ -158,7 +127,7 @@ adi_uptake_options = {
     tooltip: {
         valueDecimals: 2,
         headerFormat: '<b>{series.name}</b><br>',
-        pointFormat: '<b>{series.name}</b>: {point.x:%A %e %b}: {point.y}% of users.'
+        pointFormat: '<b>{series.name}</b>: {point.x:%A %e %b %Y}: {point.y}% of users.'
     },
     plotOptions: {
         spline: {
@@ -193,7 +162,7 @@ beta_adi_options = {
     },
     tooltip: {
             headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+            pointFormat: '{series.name} {point.x:%A %e %b %Y}: {point.y} users.'
     },
 
     legend: {
@@ -244,7 +213,7 @@ user_count_options = {
     tooltip: {
         valueDecimals: 0,
         headerFormat: '<b>{series.name}</b><br>',
-        pointFormat: '{series.name} {point.x:%A %e %b}: {point.y} users.'
+        pointFormat: '{series.name} {point.x:%A %e %b %Y}: {point.y} users.'
     },
     plotOptions: {
         series: {
@@ -275,6 +244,7 @@ languages_options = {
     },
     xAxis: {
         type: 'datetime',
+        startOfWeek: 0,
         title: {
              text: 'Date'
         }
@@ -288,7 +258,7 @@ languages_options = {
     tooltip: {
         valueDecimals: 2,
         headerFormat: '<b>{series.name}</b><br>',
-        pointFormat: '{series.name} {point.x:%A %e %b}: {point.y}%'
+        pointFormat: '{series.name} {point.x:%A %e %b %Y}: {point.y}%'
     },
     plotOptions: {
         column: {
@@ -318,6 +288,7 @@ $.getJSON('thunderbird_ami.json', function(data) {
     var opt = user_count_options;
     opt.chart.type = 'areaspline'
     opt.series = [{name: "AMI", id: "ami", data: ami['graph']}];
+    opt.xAxis.startOfWeek = 0; // Set start of week to Sundays.
     opt.title = {text: 'Monthly Active Installations for Release channel'};
     Highcharts.stockChart('line_ami', opt);
     $('#ami').DataTable( {
