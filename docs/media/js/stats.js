@@ -40,7 +40,7 @@ function format_financial_data(content) {
     for (let y in data['yearly']) {
         yearlydata.push({name: y, y: data['yearly'][y]});
     }
-    data['yearly'] = [{data: yearlydata}]
+    data['yearly'] = [{data: yearlydata}, content['spending'][0]]
     return data
 }
 
@@ -363,35 +363,24 @@ dmonthly_options = {
     },
 }
 
-spending_options = {
-    chart: {
-        type: 'pie'
-    },
-    title: {
-        text: 'Spending by Category'
-    },
-    tooltip: {
-        pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
-    },
-    accessibility: {
-        point: {
-            valueSuffix: '%'
-        }
-    },
-    plotOptions: {
-        pie: {
-            allowPointSelect: true,
-            cursor: 'pointer',
-            dataLabels: {
-                enabled: true,
-                format: '<b>{point.name}</b>: {point.percentage:.1f} %'
+yearly_options = {
+    chart: {height: 750},
+    title: {text: '<b>Donation Totals & Spending</b>'},
+    tooltip: {pointFormat: 'Total: <b>{point.y} USD</b>'},
+    legend: {enabled: false},
+    xAxis: {labels: {enabled: false}},
+    yAxis: {title: {text: '$ US'}},
+    labels: {
+        items: [{
+            html: 'Spending by Category(2020)',
+            style: {
+                left: '150px',
+                top: '20px',
+                fontSize: '20px'
             }
-        }
+        }]
     }
 }
-
-
-
 
 $.getJSON('financials.json', function(data) {
     let donations = format_financial_data(data);
@@ -400,26 +389,19 @@ $.getJSON('financials.json', function(data) {
     let opt = dmonthly_options;
     opt.series = donations['monthly'];
     opt.colors = ['#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3'];
-    opt.title = {text: 'Monthly Donations per Year'};
+    opt.title = {text: '<b>Monthly Donations</b>'};
     Highcharts.stockChart('dmonthly', opt);
-    // Yearly donation chart
-    yopt = {
-        chart: {type: 'column'},
-        title: {text: 'Yearly Donation Totals'},
-        xAxis: {labels: {enabled: false}},
-        tooltip: {pointFormat: 'Total: <b>{point.y} USD</b>'},
-        plotOptions: {
-            column: {
-                dataLabels: {enabled: true, format: '<b>{point.name}</b>'}
-            },
-            series: {showInLegend: false}
-        }
-    }
+    // Yearly donation and spending chart
+    let yopt = yearly_options;
     yopt.series = donations['yearly'];
+    yopt.series[0]['type'] = 'column';
+    yopt.series[0]['color'] = '#ea4335';
+    yopt.series[0]['dataLabels'] = {enabled: true, format:'{point.name}'};
+    yopt.series[1]['type'] = 'pie';
+    yopt.series[1]['tooltip'] = {pointFormat: '{series.name}: <b>{point.percentage:.2f}%</b>'};
+    yopt.series[1]['size'] = '250';
+    yopt.series[1]['center'] = ['275','175'];
     Highcharts.chart('dyearly', yopt);
-    // Spending chart
-    spending_options.series = donations['spending'];
-    Highcharts.chart('spending', spending_options)
 
 });
 
@@ -449,7 +431,12 @@ $.getJSON('thunderbird_adi.json', function(data) {
     var adi = format_adi_data(data);
     var opt = user_count_options;
     opt.chart.type = 'line'
-    opt.series = [{name: "ADI", id: "adi", data: adi['graph']}, {name: "7-day Moving Average", type: "sma", linkedTo: "adi", params: { period: 7 }},];
+    opt.series = [
+        {name: "ADI", id: "adi", data: adi['graph']},
+        {name: "7-day Moving Average", type: "sma", linkedTo: "adi",
+            params: { period: 7 }
+        },
+    ];
     opt.title = {text: 'Daily Active Installations for Release channel'};
     Highcharts.stockChart('line_adi', opt);
 
