@@ -504,6 +504,13 @@ $.getJSON('locales.json', function(data) {
     Highcharts.stockChart('languages', opt)
 });
 
+$.getJSON('platforms.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = languages_options;
+    opt.series = adi['uptake'];
+    opt.title = {text: '% Users on Platform'};
+    Highcharts.stockChart('platforms', opt)
+});
 
 $.getJSON('addon_stats.json', function(data) {
     var adi = format_addon_stats(data);
