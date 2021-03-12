@@ -1,6 +1,7 @@
 $( document ).ready(function() {
     // Yeah all of this is a horrible hack just to make the tabs linkable.
-    let tabs = ["ami", "default", "beta", "version", "addons", "platlang"];
+    let tabs = ["ami", "default", "beta", "version", "addons",
+                "platlang", "financials"];
 
     $("#tab1").prop('checked', true);
     for (let i in tabs) {
@@ -13,6 +14,35 @@ $( document ).ready(function() {
         });
     }
 });
+
+function format_financial_data(content) {
+    let data = {}
+    data['monthly'] = []
+    data['spending'] = content['spending'];
+    data['yearly'] = content['donations_yearly'];
+    let startYear = ''
+    for (let y in content['donations_monthly']) {
+        if (!startYear) {
+            startYear = y;
+        }
+        data['yearly'][y] = 0;
+        let series = {name: y, data: []}
+        for (let m in content['donations_monthly'][y]) {
+            let value = content['donations_monthly'][y][m]
+            let date = new Date(startYear+'-'+m+'-'+'01');
+            series['data'].push([date.getTime(), value])
+            data['yearly'][y] += value;
+        }
+        data['monthly'].push(series)
+    }
+
+    let yearlydata = []
+    for (let y in data['yearly']) {
+        yearlydata.push({name: y, y: data['yearly'][y]});
+    }
+    data['yearly'] = [{data: yearlydata}]
+    return data
+}
 
 function format_ami_data(content) {
     let ami = {};
@@ -282,6 +312,116 @@ languages_options = {
         enabled: false
     },
 }
+
+dmonthly_options = {
+    chart: {
+        type: 'area'
+    },
+
+    xAxis: {
+        type: 'datetime',
+        labels: {
+            format: '{value:%b}'
+        },
+        title: {
+             text: 'Date'
+        }
+    },
+    yAxis: {
+        title: {
+            text: '$ US dollars'
+        },
+        min: 0
+    },
+    tooltip: {
+        valueDecimals: 0,
+        headerFormat: '<b>{series.name}</b><br>',
+        pointFormat: '{series.name} {point.x:%b}: <b>{point.y} USD</b>'
+    },
+    plotOptions: {
+        spline: {
+            marker: {
+                enabled: true
+            }
+        },
+        series: {
+            fillOpacity: 0.25,
+            showInLegend: true,
+        }
+    },
+    rangeSelector:{
+        enabled:true
+    },
+   legend: {
+        enabled: true
+    },
+    navigator: {
+        enabled: false
+    },
+    scrollbar: {
+        enabled: false
+    },
+}
+
+spending_options = {
+    chart: {
+        type: 'pie'
+    },
+    title: {
+        text: 'Spending by Category'
+    },
+    tooltip: {
+        pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
+    },
+    accessibility: {
+        point: {
+            valueSuffix: '%'
+        }
+    },
+    plotOptions: {
+        pie: {
+            allowPointSelect: true,
+            cursor: 'pointer',
+            dataLabels: {
+                enabled: true,
+                format: '<b>{point.name}</b>: {point.percentage:.1f} %'
+            }
+        }
+    }
+}
+
+
+
+
+$.getJSON('financials.json', function(data) {
+    let donations = format_financial_data(data);
+
+    // Monthly donation chart
+    let opt = dmonthly_options;
+    opt.series = donations['monthly'];
+    opt.colors = ['#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3'];
+    opt.title = {text: 'Monthly Donations per Year'};
+    Highcharts.stockChart('dmonthly', opt);
+    // Yearly donation chart
+    yopt = {
+        chart: {type: 'column'},
+        title: {text: 'Yearly Donation Totals'},
+        xAxis: {labels: {enabled: false}},
+        tooltip: {pointFormat: 'Total: <b>{point.y} USD</b>'},
+        plotOptions: {
+            column: {
+                dataLabels: {enabled: true, format: '<b>{point.name}</b>'}
+            },
+            series: {showInLegend: false}
+        }
+    }
+    yopt.series = donations['yearly'];
+    Highcharts.chart('dyearly', yopt);
+    // Spending chart
+    spending_options.series = donations['spending'];
+    Highcharts.chart('spending', spending_options)
+
+});
 
 $.getJSON('thunderbird_ami.json', function(data) {
     var ami = format_ami_data(data);
