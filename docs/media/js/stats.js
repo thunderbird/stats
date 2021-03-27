@@ -1,7 +1,7 @@
 $( document ).ready(function() {
     // Yeah all of this is a horrible hack just to make the tabs linkable.
     let tabs = ["ami", "default", "beta", "version", "addons",
-                "platlang", "financials"];
+                "platlang", "financials", "telemetry"];
 
     $("#tab1").prop('checked', true);
     for (let i in tabs) {
@@ -381,6 +381,20 @@ yearly_options = {
         }]
     }
 }
+$.getJSON('telemetry.json', function(data) {
+    let i = 0;
+    for (let key in data) {
+        i++;
+        var adi = format_beta_adi(data[key]);
+        var opt = user_count_options;
+        opt.series = adi['betas'];
+        opt.title = {text: key};
+        opt.chart.type = 'areaspline';
+        opt.chart.height = 1000;
+        opt.colors = ['#33b8ff','#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3'];
+        Highcharts.stockChart('probe'+i.toString(), opt)
+    }
+});
 
 $.getJSON('financials.json', function(data) {
     let donations = format_financial_data(data);
