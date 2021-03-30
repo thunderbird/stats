@@ -107,8 +107,11 @@ function format_beta_adi(content) {
     // Sort versions by # of users descending.
     let betas = Object.entries(content[lastday]['versions']).sort((a, b) => b[1] - a[1]);
     adi['betas'] = [];
+    adi['latest'] = [];
     // Build an object with arrays showing percentage of users for each version relative to total.
     for (let version of betas) {
+        // Version data for the latest day only.
+        adi['latest'].push({name: version[0], data: [content[lastday]['versions'][version[0]]]});
         let series = {name: version[0], data: []};
         for (let k in content) {
             date = new Date(k);
@@ -250,7 +253,7 @@ user_count_options = {
             showInLegend: true
         }
     },
-   legend: {
+    legend: {
         enabled: true
     },
     navigator: {
@@ -352,7 +355,7 @@ dmonthly_options = {
     rangeSelector:{
         enabled:true
     },
-   legend: {
+    legend: {
         enabled: true
     },
     navigator: {
@@ -381,18 +384,75 @@ yearly_options = {
         }]
     }
 }
+
+telemetry_options = {
+    chart: {
+        type: 'column'
+    },
+    rangeSelector:{
+        enabled:true,
+        selected: 4
+    },
+    yAxis: {
+        title: {
+            text: '# of Installations'
+        },
+        min: 0
+    },
+    xAxis: {
+        type: 'datetime',
+        startOfWeek: 0,
+        title: {
+             text: 'Date'
+        }
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                format: '{point.y}'
+            }
+        },
+        series: {
+            showInLegend: true
+        }
+    },
+
+}
+
+common_options = {
+    legend: {
+        enabled: true
+    },
+    navigator: {
+        enabled: false
+    },
+    scrollbar: {
+        enabled: false
+    },
+}
+
 $.getJSON('telemetry.json', function(data) {
     let i = 0;
     for (let key in data) {
         i++;
         var adi = format_beta_adi(data[key]);
-        var opt = user_count_options;
+        var opt = telemetry_options;
+        Object.assign(opt, common_options);
         opt.series = adi['betas'];
-        opt.title = {text: key};
-        opt.chart.type = 'areaspline';
-        opt.chart.height = 1000;
-        opt.colors = ['#33b8ff','#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3'];
-        Highcharts.stockChart('probe'+i.toString(), opt)
+        opt.title = {text: '<b>'+key+'</b>'};
+        Highcharts.stockChart('probe'+i.toString(), opt);
+        opt2 = {};
+        opt2.title = {text: 'Users by <b>'+key+'</b> for latest week in <b>log scale</b>'};
+        opt2.series = adi['latest'];
+        opt2.chart = {type: 'column', 'height': 500};
+        opt2.yAxis = {type: 'logarithmic', min: 1, max: 10000000};
+        opt2.xAxis = {visible: false};
+        opt2.colors = ['#33b8ff','#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3',
+        '#b71c1c', '#512e5f', '#3498db', '#1abc9c', '#f1c40f', '#f39c12', '#d35400', '#2e4053',
+        '#e91e63', '#cd6155', '#c39bd3', '#aed6f1', '#82e0aa', '#fad7a0'];
+        Highcharts.chart('probe'+i+'a', opt2);
     }
 });
 
