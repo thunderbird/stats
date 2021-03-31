@@ -119,6 +119,9 @@ label[for*="5"]:before {
 label[for*="6"]:before {
   content: "\f004"; }
 
+label[for*="7"]:before {
+  content: "\f05a"; }
+
 label:hover {
   color: #789;
   cursor: pointer; }

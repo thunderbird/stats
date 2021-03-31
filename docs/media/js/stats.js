@@ -441,7 +441,7 @@ $.getJSON('telemetry.json', function(data) {
         var opt = telemetry_options;
         Object.assign(opt, common_options);
         opt.series = adi['betas'];
-        opt.title = {text: '<b>'+key+'</b>'};
+        opt.title = {text: 'Weekly users by <b>'+key+'</b>'};
         Highcharts.stockChart('probe'+i.toString(), opt);
         opt2 = {};
         opt2.title = {text: 'Users by <b>'+key+'</b> for latest week in <b>log scale</b>'};
