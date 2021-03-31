@@ -1,0 +1,3 @@
+pyathena==2.2.0 \
+    --hash=sha256:b7c8f7db63bd179da559c84a5329597cd3d7348f6afe217966a7ce751f4c0b3d \
+    --hash=sha256:f2f40e199f7ee3e788d670df6f593d938cd0884148601cfbe7c9a772a09cced0
