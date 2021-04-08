@@ -1,5 +1,5 @@
 import collections
-import datetime
+import datetime as dt
 import json
 import pyathena
 import queries
@@ -21,11 +21,11 @@ def flatten(data):
         result[d['key']] = d['count']
     return result
 
-
-def date_range(start, increment, end=datetime.datetime.now().date()):
+# Athena data is stored in S3 using UTC, so use that to determine when to query.
+def date_range(start, increment, end=dt.datetime.now(dt.timezone.utc).date()):
     while start < end:
         yield start.strftime("%Y-%m-%d")
-        start += datetime.timedelta(days=increment)
+        start += dt.timedelta(days=increment)
 
 
 def parse_cached_json(outfile_name):
@@ -51,7 +51,7 @@ class AthenaQuery(object):
         """ Returns a date string with YYYY/MM/DD format(for Athena partitions) num_days
         before self.date.
         """
-        return (self.date - datetime.timedelta(num_days)).strftime("%Y/%m/%d")
+        return (self.date - dt.timedelta(num_days)).strftime("%Y/%m/%d")
 
     def format_data(self, combine=None):
         if self.data:
