@@ -40,14 +40,18 @@ def parse_cached_json(outfile_name):
 
 
 class AthenaQuery(object):
-    """
-    Class to do queries against Athena and return results.
-    """
+    """Class to do queries against Athena and return results."""
     def __init__(self, date, s3bucket=settings.s3bucket, region=settings.region):
         self.cursor = cursor = pyathena.connect(s3bucket, region).cursor(pyathena.cursor.DictCursor)
         self.date = date
         self.data = None
         self.totalusers = None
+
+    def _dateformat(self, num_days=0):
+        """ Returns a date string with YYYY/MM/DD format(for Athena partitions) num_days
+        before self.date.
+        """
+        return (self.date - datetime.timedelta(num_days)).strftime("%Y/%m/%d")
 
     def format_data(self, combine=None):
         if self.data:
@@ -60,8 +64,8 @@ class AthenaQuery(object):
     def keyedscalar_users(self, fieldname, num_days=6):
         params = {
             "fieldname": fieldname,
-            "date1": (self.date - datetime.timedelta(num_days)).strftime("%Y/%m/%d"),
-            "date2": self.date.strftime("%Y/%m/%d"),
+            "date1": self._dateformat(num_days),
+            "date2": self._dateformat(),
             "version": settings.release_version
         }
         self.cursor.execute(queries.keyedscalar['users'].format(**params))
@@ -82,3 +86,19 @@ class AthenaQuery(object):
             for d in self.data.keys():
                 data['versions'][d] = self.data[d]
         return data
+
+class TotalUsers(AthenaQuery):
+    """ Get the total unique users for version over a time span of num_days, starting from date."""
+    def __init__(self, date, version, num_days, s3bucket=settings.s3bucket, region=settings.region):
+        super().__init__(date, s3bucket, region)
+        self.version = version
+        self.num_days = num_days
+
+    def query_totalusers(self):
+        params = {
+            "date1": super()._dateformat(self.num_days),
+            "date2": super()._dateformat(),
+            "version": self.version
+        }
+        super()._totalusers(params)
+        return self

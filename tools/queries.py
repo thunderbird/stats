@@ -1,4 +1,5 @@
 
+#params fieldname, date1, date2, version
 keyedscalar = {
 "users" : """
     WITH data AS
@@ -19,6 +20,7 @@ keyedscalar = {
     """
 }
 
+#params date1, date2, version
 totalusers = """
     SELECT count(DISTINCT clientid)
     FROM telemetry_data
