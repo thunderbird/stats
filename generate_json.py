@@ -3,12 +3,13 @@ import csv
 import datetime
 import json
 import os
+from dateutil.relativedelta import relativedelta
 
 start_date = datetime.date(2018, 8, 1)
 # First day with data for 68.
 start68 = datetime.date(2019,9,3)
 
-today = datetime.date.today()
+today = datetime.date.today() - datetime.timedelta(1)
 yesterday = (today - datetime.timedelta(1)).strftime('%Y-%m-%d')
 
 s3_bucket = 'versioncheck-athena-results'
@@ -23,6 +24,7 @@ file_name = '000000_0'
 theme_guid = '{972ce4c6-7e08-4474-a285-3208198ce6fd}'
 tb_guid = '{3550f703-e582-4d05-9a08-453d09bdfdc6}'
 sm_guid = '{92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}'
+
 
 def parse_cached_json(filename):
     """Pull data from last JSON file if it exists, otherwise regenerate all data. """
@@ -99,8 +101,8 @@ def parse_s3_data(date):
 
 
 def aggregate_versions(record, vmin, vmax):
-    """ Aggregates versions in record by vmin and vmax. Versions below vmin will all
-    be included in a single data point. Versions equal"""
+    """ Aggregates versions in record by vmin and vmax. Versions equal to and below vmin will all
+    be included in a single data point. """
     majors = {}
     total = 0
 
@@ -121,10 +123,11 @@ def aggregate_versions(record, vmin, vmax):
 
     # Prune data points that have less than 1/1000th(0.1%) of users to clean up graph,
     # this is usually random old beta versions. Also adjust total accordingly so we
-    # still sum to 100%.
+    # still sum to 100%. Never prune vmax.
     pruned = {}
     for version, count in majors.iteritems():
-        if int(version.split('.')[0]) <= vmax and count > int(record['count']/1000):
+        major = int(version.split('.')[0])
+        if major == vmax or (major <= vmax and count > int(record['count']/1000)):
             pruned[version] = count
             total += int(count)
 
@@ -136,11 +139,14 @@ def aggregate_versions(record, vmin, vmax):
     return aggregate
 
 
-def build_aggregate(jsondata, vmin, vmax):
+def build_aggregate(jsondata, vmin, vmax, enddate):
     aggregate = {}
+    startdate = enddate - relativedelta(months=18)
     outfile_name = "docs/{vmax}uptake.json".format(vmax=vmax)
     for key in jsondata.keys():
-        aggregate[key] = aggregate_versions(jsondata[key], vmin, vmax)
+        keydate = datetime.datetime.strptime(key, "%Y-%m-%d").date()
+        if  keydate < enddate and keydate > startdate:
+            aggregate[key] = aggregate_versions(jsondata[key], vmin, vmax)
     with open(outfile_name, 'w') as outfile:
         json.dump(aggregate, outfile)
 
@@ -186,9 +192,9 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print daystring
 
-build_aggregate(data['json'], 38, 78)
-build_aggregate(data['json'], 38, 68)
-build_aggregate(data['json'], 38, 60)
+build_aggregate(data['json'], 60, 78, datetime.date(2022, 1, 2))
+build_aggregate(data['json'], 52, 68, datetime.date(2021, 1, 2))
+build_aggregate(data['json'], 38, 60, datetime.date(2020, 1, 2))
 build_beta_aggregate(data['json'], 78)
 
 with open(outfile_name, 'w') as outfile:
