@@ -9,7 +9,7 @@ start_date = datetime.date(2018, 8, 1)
 # First day with data for 68.
 start68 = datetime.date(2019,9,3)
 
-today = datetime.date.today() - datetime.timedelta(1)
+today = datetime.date.today() # - datetime.timedelta(1)
 yesterday = (today - datetime.timedelta(1)).strftime('%Y-%m-%d')
 
 s3_bucket = 'versioncheck-athena-results'
