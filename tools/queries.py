@@ -4,7 +4,7 @@ keyedscalar = {
 "users" : """
     WITH data AS
         (SELECT clientid,
-             CAST(json_extract(payload,
+             TRY_CAST(json_extract(payload,
              '$.processes["parent"]["keyedscalars"]["{fieldname}"]') AS MAP(VARCHAR, INTEGER)) AS keys
         FROM telemetry_data
         WHERE type='main'
