@@ -1,6 +1,13 @@
 s3bucket ='s3://thunderbird-telemetry1/results/'
 region = 'us-east-1'
+# TODO: Change this to a tuple and define lowest and highest version numbers.
 release_version = "78."
+
+# Add-ons to ignore when counting users.
+ignore_addon_guids = [
+    'wetransfer@extensions.thunderbird.net',
+    'search.mozilla.org',
+]
 
 keyedscalars = [
     {'key': 'tb.account.count', 'combine':['facebook']},
