@@ -43,7 +43,7 @@ def parse_cached_json(outfile_name):
 
 
 def get_page(url):
-    response = urllib.urlopen(url)
+    response = urllib.request.urlopen(url)
     json_response = json.loads(response.read())
     return json_response
 
@@ -140,11 +140,11 @@ class TotalUsers(AthenaQuery):
 
 class TotalAddonUsers(AthenaQuery):
     """ Get the total unique users for version over a time span of num_days, starting from date."""
-    def __init__(self, date, version, num_days, exclude = 0, s3bucket=settings.s3bucket, region=settings.region):
+    def __init__(self, date, version, num_days, s3bucket=settings.s3bucket, region=settings.region):
         super().__init__(date, s3bucket, region)
         self.version = version
         self.num_days = num_days
-        self.exclude = exclude
+        self.exclude = 0
 
     def exclude_guids(self):
         guids = settings.ignore_addon_guids
@@ -152,7 +152,8 @@ class TotalAddonUsers(AthenaQuery):
             guids += get_addon_guids()['top10']
         return '(' + '|'.join("{0}".format(re.escape(g)) for g in guids) + ')'
 
-    def query_totalusers(self):
+    def query_totalusers(self, exclude=0):
+        self.exclude = exclude
         params = {
             "date1": super()._dateformat(self.num_days),
             "date2": super()._dateformat(),
