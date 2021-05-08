@@ -147,7 +147,7 @@ class TotalAddonUsers(AthenaQuery):
         self.exclude = 0
 
     def exclude_guids(self):
-        guids = settings.ignore_addon_guids
+        guids = list(settings.ignore_addon_guids)
         if self.exclude:
             guids += get_addon_guids()['top10']
         return '(' + '|'.join("{0}".format(re.escape(g)) for g in guids) + ')'

@@ -4,10 +4,10 @@ import settings
 import tools
 from pathlib import Path
 
-start_date = datetime.date(2020, 12, 1)
+start_date = datetime.date(2020, 11, 29)
 filename = Path(__file__).parent / '../docs/addon_stats.json'
 # Number of days to query between, SQL Between is inclusive so this is
-# 30 days of actual data.
+# 7 days of actual data.
 num_days = 6
 # Number to put in the LIKE %version% part of the Athena query.
 version = 78

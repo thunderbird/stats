@@ -3,6 +3,10 @@ import json
 import sys
 import tools
 
+if not (len(sys.argv) == 3):
+    print("First argument is filename and second argument is a date(YYYY-MM-DD) to truncate to.")
+    sys.exit()
+
 filename = sys.argv[1]
 
 def string_to_date(daystring):
