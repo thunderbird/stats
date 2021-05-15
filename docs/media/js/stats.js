@@ -586,56 +586,66 @@ $.getJSON('platforms.json', function(data) {
     Highcharts.stockChart('platforms', opt)
 });
 
-$.getJSON('addon_stats.json', function(data) {
-    var adi = format_addon_stats(data);
-
-    Highcharts.stockChart('addon_stats', {
-        chart: {
-            type: 'areaspline'
-        },
+var addon_options = {
+    chart: {
+        type: 'areaspline'
+    },
+    title: {
+        text: 'All Addon Users as % of Total Users'
+    },
+    xAxis: {
+        startOfWeek: 0,
+        type: 'datetime',
+    },
+    yAxis: {
         title: {
-            text: 'Addon Users as % of Total'
+            text: '% of Total Users'
         },
-        xAxis: {
-            type: 'datetime',
-        },
-        yAxis: {
-            title: {
-                text: '% of Total Users'
-            },
-            min: 0,
-            max: 100
-        },
-        tooltip: {
-            valueDecimals: 2,
-            headerFormat: '<b>{series.name}</b><br>',
-            pointFormat: '{point.x:%A %e %b}: {point.y}% of users.'
-        },
+        min: 0,
+        max: 100
+    },
+    tooltip: {
+        valueDecimals: 2,
+        headerFormat: '<b>{series.name}</b><br>',
+        pointFormat: '{point.x:%A %e %b %Y}: {point.y}% of users.'
+    },
 
-        legend: {
-            enabled: true
-        },
+    legend: {
+        enabled: true
+    },
 
-        plotOptions: {
-            series: {
-                showInLegend: true
-            }
-        },
+    plotOptions: {
+        series: {
+            showInLegend: true
+        }
+    },
 
-        navigator: {
-            enabled: false
-        },
+    navigator: {
+        enabled: false
+    },
 
-        scrollbar: {
-            enabled: false
-        },
+    scrollbar: {
+        enabled: false
+    },
 
-        rangeSelector: {
-            selected: 4
-        },
+    rangeSelector: {
+        selected: 4
+    },
 
-        colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
-        series: adi
+    colors: ['#6CF', '#39F', '#06C', '#036', '#000'],
+    series: adi
+}
+
+$.getJSON('addon_stats.json', function(data) {
+    let adi = format_addon_stats(data);
+    addon_options.series = adi
+    Highcharts.stockChart('addon_stats', addon_options);
+
+    $.getJSON('2020_addon_stats.json', function(data) {
+        let adi = format_addon_stats(data);
+        addon_options.series = adi
+        addon_options.title.text = "2020 All Add-on Users as % of Total Users"
+        Highcharts.stockChart('2020_addon_stats', addon_options);
     });
 });
 
