@@ -200,9 +200,4 @@ build_beta_aggregate(data['json'], 78)
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
 
-addon_data = parse_cached_json('docs/addon_stats.json')
-for addon_daystring in addon_data['json'].keys():
-    addon_data['json'][addon_daystring]['total'] = data['json'][addon_daystring]['count']
 
-with open('docs/addon_stats.json', 'w') as outfile:
-    json.dump(addon_data['json'], outfile)
