@@ -532,8 +532,16 @@ $.getJSON('beta_nightly_adi.json', function(data) {
     var adi = format_beta_adi(data);
     var opt = beta_adi_options;
     opt.series = adi['betas'];
-    opt.title = {text: 'Active Beta and Nightly Installations after 78'};
+    opt.title = {text: 'Active Beta and Nightly Installations after 91'};
     Highcharts.stockChart('line_beta_adi', opt);
+});
+
+$.getJSON('78beta_nightly_adi.json', function(data) {
+    var adi = format_beta_adi(data);
+    var opt = beta_adi_options;
+    opt.series = adi['betas'];
+    opt.title = {text: '79-91 Beta history'};
+    Highcharts.stockChart('68line_beta_adi', opt);
 });
 
 $.getJSON('68beta_nightly_adi.json', function(data) {
@@ -542,6 +550,15 @@ $.getJSON('68beta_nightly_adi.json', function(data) {
     opt.series = adi['betas'];
     opt.title = {text: '69-78 Beta history'};
     Highcharts.stockChart('68line_beta_adi', opt);
+});
+
+$.getJSON('91uptake.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = adi_uptake_options;
+    opt.series = adi['uptake'];
+    opt.rangeSelector = {selected: 4};
+    opt.title = {text: 'TB91 Uptake as % of ADI'};
+    Highcharts.stockChart('91uptake', opt)
 });
 
 $.getJSON('78uptake.json', function(data) {
