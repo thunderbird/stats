@@ -541,7 +541,7 @@ $.getJSON('78beta_nightly_adi.json', function(data) {
     var opt = beta_adi_options;
     opt.series = adi['betas'];
     opt.title = {text: '79-91 Beta history'};
-    Highcharts.stockChart('68line_beta_adi', opt);
+    Highcharts.stockChart('78line_beta_adi', opt);
 });
 
 $.getJSON('68beta_nightly_adi.json', function(data) {
