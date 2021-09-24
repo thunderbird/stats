@@ -44,11 +44,11 @@
         "2018": 1205449
     },
     "spending": [{"data":[
-        {"name": "Personnel", "y": 82.48, "sliced": true},
-        {"name": "Professional Services", "y": 10.6},
-        {"name": "Donation Transaction Fees", "y": 4.83},
-        {"name": "General & Administrative", "y": 0.95},
-        {"name": "Computer & Technology", "y": 0.99},
-        {"name": "Events & Travel", "y": 0.15}
+        {"name": "Personnel", "y": 76.89, "sliced": true},
+        {"name": "Professional Services", "y": 12.76},
+        {"name": "Donation Transaction Fees", "y": 4.04},
+        {"name": "General & Administrative", "y": 5.08},
+        {"name": "Computer & Technology", "y": 1.23},
+        {"name": "Events & Travel", "y": 0}
     ]}]
 }
