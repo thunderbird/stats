@@ -48,7 +48,6 @@
         {"name": "Professional Services", "y": 12.76},
         {"name": "Donation Transaction Fees", "y": 4.04},
         {"name": "General & Administrative", "y": 5.08},
-        {"name": "Computer & Technology", "y": 1.23},
-        {"name": "Events & Travel", "y": 0}
+        {"name": "Computer & Technology", "y": 1.23}
     ]}]
 }
