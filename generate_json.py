@@ -192,7 +192,7 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print daystring
 
-build_aggregate(data['json'], 78, 91, datetime.date(2023, 1, 2))
+build_aggregate(data['json'], 68, 91, datetime.date(2023, 1, 2))
 build_aggregate(data['json'], 60, 78, datetime.date(2022, 1, 2))
 build_aggregate(data['json'], 52, 68, datetime.date(2021, 1, 2))
 build_aggregate(data['json'], 38, 60, datetime.date(2020, 1, 2))
