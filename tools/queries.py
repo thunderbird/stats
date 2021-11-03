@@ -7,7 +7,7 @@ keyedscalar = {
              '$.processes["parent"]["keyedscalars"]["{fieldname}"]') AS MAP(VARCHAR, INTEGER)) AS keys
         FROM telemetry_data
         WHERE type='main'
-                AND application.version LIKE '%%{version}%%'
+                {version}
                 AND date BETWEEN '{date1}' AND '{date2}')
     SELECT key,
              count(DISTINCT clientid) as count
@@ -27,14 +27,14 @@ totalusers = {
     WHERE date
         BETWEEN '{date1}'
             AND '{date2}'
-            AND application.version LIKE '%%{version}%%';
+            {version};
 """,
 # params date1, date2, version, pingtype
 "pingtype" : """
     SELECT count(DISTINCT clientid)
     FROM telemetry_data
     WHERE type='{pingtype}'
-            AND application.version LIKE '%%{version}%%'
+            {version}
             AND date
         BETWEEN '{date1}'
             AND '{date2}';
@@ -47,7 +47,7 @@ totalusers = {
              '$.addons["activeaddons"]') AS MAP(VARCHAR, JSON)) AS keys
         FROM telemetry_data
         WHERE type='modules'
-                AND application.version LIKE '%%{version}%%'
+                {version}
                 AND date
             BETWEEN '{date1}'
                 AND '{date2}')

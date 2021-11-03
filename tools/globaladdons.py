@@ -9,8 +9,6 @@ filename = Path(__file__).parent / '../docs/addon_stats.json'
 # Number of days to query between, SQL Between is inclusive so this is
 # 7 days of actual data.
 num_days = 6
-# Number to put in the LIKE %version% part of the Athena query.
-version = 78
 
 dataloc = tools.parse_cached_json(filename)['json']
 # One data point per week.
@@ -19,7 +17,7 @@ for daystring in tools.date_range(start_date, 7):
         dataloc[daystring] = {}
         print(daystring)
         curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
-        q = tools.TotalAddonUsers(curdate, version, num_days)
+        q = tools.TotalAddonUsers(curdate, num_days, settings.release_version)
         d = {
             "total": q.query_totalusers().totalusers,
             "addon_count": q.addon_totalusers,

@@ -10,11 +10,9 @@ filename = Path(__file__).parent / '../docs/thunderbird_ami.json'
 # Number of days to query between, SQL Between is inclusive so this is
 # 30 days of actual data.
 num_days = 29
-# Number to put in the LIKE %version% part of the Athena query.
-version = 8
 
-def percent78(end_date, num_days, filename):
-    """ Temporary function to determine the percentage of 78 users to divide the total by."""
+def percent_old(end_date, num_days, filename):
+    """ Determine the percentage of users on versions before Telemetry to divide the total by."""
     data = tools.parse_cached_json(filename)['json']
     start_date = end_date - datetime.timedelta(num_days)
     daterange = end_date - start_date
@@ -26,12 +24,12 @@ def percent78(end_date, num_days, filename):
         for version, count in data[daystring]['versions'].items():
             major = version.split('.')[0]
             try:
-                if int(major) == 78:
+                if int(major) < settings.first_version:
                     total += int(count)
             except ValueError:
                 pass
         if total > 0:
-            percent = (total * 1.0) / data[daystring]['count']
+            percent = 1 - ((total * 1.0) / data[daystring]['count'])
             percents.append(percent)
     return sum(percents) / float(len(percents))
 
@@ -45,11 +43,11 @@ for daystring in tools.date_range(start_date, 7):
         dataloc[daystring] = {}
         print(daystring)
         curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
-        q = tools.TotalUsers(curdate, version, num_days)
+        q = tools.TotalUsers(curdate, num_days)
         d = {
             "start_date": (curdate - datetime.timedelta(num_days)).strftime("%Y-%m-%d"),
             "ami": q.query_totalusers().totalusers,
-            "78": round(percent78(curdate, num_days, adi_filename), 3)
+            "78": round(percent_old(curdate, num_days, adi_filename), 3)
         }
         dataloc[daystring] = d
     with open(filename, 'w') as file:

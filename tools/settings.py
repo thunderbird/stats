@@ -1,7 +1,9 @@
 s3bucket ='s3://thunderbird-telemetry1/results/'
 region = 'us-east-1'
-# TODO: Change this to a tuple and define lowest and highest version numbers.
-release_version = "78."
+# The first release version of Thunderbird that supported Telemetry.
+first_version = 78
+# List of recently released versions.
+release_version = [78, 91]
 
 # Add-ons to ignore when counting users.
 ignore_addon_guids = [
