@@ -87,7 +87,7 @@ class AthenaQuery(object):
         """ Returns a version condition to use in a query, like
         AND (application.version LIKE '%%91%%')
         """
-        v_string = "application.version LIKE '%%{version}%%'"
+        v_string = "application.version LIKE '%{version}%'"
         string = ''
         if not versions:
             versions = self.versions
