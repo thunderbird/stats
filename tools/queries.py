@@ -57,3 +57,29 @@ totalusers = {
     WHERE NOT regexp_like(key, '{guids}');
 """
 }
+
+# params date1, date2, version
+locale_query = """
+SELECT COUNT(), json_extract_scalar(environment,
+         '$.settings["locale"]')
+FROM telemetry_data
+WHERE type='modules'
+        {version}
+        AND date BETWEEN '{date1}' AND '{date2}'
+GROUP BY json_extract_scalar(environment,
+         '$.settings["locale"]')
+"""
+
+# params date1, date2, version
+platform_query = """
+SELECT count(id),
+         CONCAT(json_extract_scalar(environment,
+         '$.system["os"]["name"]'), json_extract_scalar(environment, '$.system["os"]["version"]'))
+FROM telemetry_data
+WHERE type='modules'
+        AND json_extract_scalar(environment, '$.system["os"]["name"]') IS NOT NULL
+        {version}
+        AND date BETWEEN '{date1}' AND '{date2}'
+
+GROUP BY  json_extract_scalar(environment, '$.system["os"]["name"]'), json_extract_scalar(environment, '$.system["os"]["version"]')
+"""
