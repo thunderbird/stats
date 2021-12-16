@@ -60,8 +60,8 @@ totalusers = {
 
 # params date1, date2, version
 locale_query = """
-SELECT COUNT(), json_extract_scalar(environment,
-         '$.settings["locale"]')
+SELECT COUNT() AS count, json_extract_scalar(environment,
+         '$.settings["locale"]') AS key
 FROM telemetry_data
 WHERE type='modules'
         {version}
@@ -72,9 +72,9 @@ GROUP BY json_extract_scalar(environment,
 
 # params date1, date2, version
 platform_query = """
-SELECT count(id),
+SELECT count(id) AS count,
          CONCAT(json_extract_scalar(environment,
-         '$.system["os"]["name"]'), json_extract_scalar(environment, '$.system["os"]["version"]'))
+         '$.system["os"]["name"]'), json_extract_scalar(environment, '$.system["os"]["version"]')) AS key
 FROM telemetry_data
 WHERE type='modules'
         AND json_extract_scalar(environment, '$.system["os"]["name"]') IS NOT NULL
