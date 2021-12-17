@@ -9,31 +9,35 @@ from pathlib import Path
 start_date = datetime.date(2021, 1, 3)
 
 class PlatLangUsers(tools.AthenaQuery):
-    """ Get the total unique users for a set of versions over a time span of num_days, starting from date."""
+    """ Get users for each platform and locale over a time span of num_days, starting from date."""
     def __init__(self, date, num_days, versions = [], s3bucket=settings.s3bucket, region=settings.region):
         super().__init__(date, versions, s3bucket, region)
         self.num_days = num_days
 
-    def query_locales(self):
+    def run_query(self, query):
         params = {
             "date1": super()._dateformat(self.num_days),
             "date2": super()._dateformat(),
             "version": super()._versioncond()
         }
-        self.cursor.execute(queries.locale_query.format(**params))
+        self.cursor.execute(query.format(**params))
         result = self.cursor.fetchall()
         if not self.totalusers:
             super()._totalusers(params, 'modules')
-        return self.reformat(result)
-
-    def reformat(self, data):
         return {
-            'versions':{x['_col1']: x['_col0'] for x in data},
+            'versions': tools.flatten(result),
             'count': self.totalusers
         }
 
+    def query_locales(self):
+        return self.run_query(queries.locale_query)
+
+
 def run_locale_query(curdate, num_days):
     return PlatLangUsers(curdate, num_days, settings.release_version).query_locales()
+
+def run_platform_query(curdate, num_days):
+    return PlatLangUsers(curdate, num_days, settings.release_version).query_platforms()
 
 def weekly(start_date, filename, func):
     """ Run func once per week and store the data in JSON. """
@@ -52,6 +56,3 @@ def weekly(start_date, filename, func):
 # Number of users per locale code.
 locale_file = Path(__file__).parent / '../docs/locales.json'
 weekly(start_date, locale_file, run_locale_query)
-
-# Number of users per platform.
-platform_file = Path(__file__).parent / '../docs/platforms.json'
