@@ -20,7 +20,9 @@ def collapse(data, stringcmp):
 def flatten(data):
     result = collections.OrderedDict()
     for d in data:
-        result[d['key']] = d['count']
+        # Get rid of any None.
+        if d.get('key', ''):
+            result[d['key']] = d['count']
     return result
 
 
