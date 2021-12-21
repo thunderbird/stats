@@ -32,6 +32,11 @@ class PlatLangUsers(tools.AthenaQuery):
     def query_locales(self):
         return self.run_query(queries.locale_query)
 
+    def query_platforms(self):
+        result = self.run_query(queries.platform_query)
+        result['versions'] = tools.collapse(result['versions'], "Linux")
+        result['versions'] = tools.collapse(result['versions'], "Darwin")
+        return result
 
 def run_locale_query(curdate, num_days):
     return PlatLangUsers(curdate, num_days, settings.release_version).query_locales()
@@ -56,3 +61,7 @@ def weekly(start_date, filename, func):
 # Number of users per locale code.
 locale_file = Path(__file__).parent / '../docs/locales.json'
 weekly(start_date, locale_file, run_locale_query)
+
+# Number of users per platform.
+platform_file = Path(__file__).parent / '../docs/platforms.json'
+weekly(start_date, platform_file, run_platform_query)
