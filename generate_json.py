@@ -47,6 +47,7 @@ def make_reader(fdir, date):
     s3 = boto3.resource('s3')
     input_dir = '/'.join([fdir, date, file_name])
     infile = s3.Object(s3_bucket, input_dir)
+    # Python 3 infile.get()['Body'].read().decode('utf-8').splitlines(True)
     data = infile.get()['Body'].read().splitlines(True)
     reader = csv.reader(data, delimiter='\t')
     return reader
@@ -80,7 +81,10 @@ def parse_s3_data(date):
     """Parses S3 stored data for a specific date and returns it ready to be exported. """
     reader = make_reader(file_dir, date)
     jsondata = s3_json_read(date)
-
+    # SELECT application.version AS key, count(DISTINCT clientid) AS count
+    # FROM telemetry_data
+    # WHERE date BETWEEN '{date1}' AND '{date2}'
+    # GROUP BY application.version
     sum = 0
     version_data = {}
     for row in reader:
@@ -190,7 +194,7 @@ for d in range(daterange.days):
     daystring = (start_date + datetime.timedelta(d)).strftime("%Y-%m-%d")
     day_data = parse_s3_data(daystring)
     data['json'][daystring] = day_data
-    print daystring
+    print(daystring)
 
 build_aggregate(data['json'], 68, 91, datetime.date(2023, 1, 2))
 build_aggregate(data['json'], 60, 78, datetime.date(2022, 1, 2))
