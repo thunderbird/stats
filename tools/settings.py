@@ -19,14 +19,14 @@ keyedscalars = [
     {'key': 'tb.mails.read_secure'},
     {'key': 'tb.websearch.usage', 'combine':['google', 'wikipedia', 'amazon']},
     {'key': 'tb.addressbook.addressbook_count'},
-   # {'key': 'tb.addressbook.contact_count'},
+#   {'key': 'tb.addressbook.contact_count'},
     {'key': 'tb.calendar.calendar_count'},
-    {'key': 'tb.calendar.read_only_calendar_count'},
-    {'key': 'tb.ui.interaction.calendar', 'start': '2021-11-29'},
-    {'key': 'tb.ui.interaction.chat', 'start': '2021-11-29'},
-    {'key': 'tb.ui.interaction.keyboard', 'start': '2021-11-29'},
-    {'key': 'tb.ui.interaction.message_display', 'start': '2021-11-29'},
-    {'key': 'tb.ui.interaction.toolbox', 'start': '2021-11-29'}
+    {'key': 'tb.calendar.read_only_calendar_count'}
+#    {'key': 'tb.ui.interaction.calendar', 'start': '2021-11-29'},
+#    {'key': 'tb.ui.interaction.chat', 'start': '2021-11-29'},
+#    {'key': 'tb.ui.interaction.keyboard', 'start': '2021-11-29'},
+#    {'key': 'tb.ui.interaction.message_display', 'start': '2021-11-29'},
+#    {'key': 'tb.ui.interaction.toolbox', 'start': '2021-11-29'}
 ]
 
 scalars = [
