@@ -131,9 +131,10 @@ def aggregate_versions(record, vmin, vmax):
     pruned = {}
     for version, count in majors.iteritems():
         major = int(version.split('.')[0])
-        if major == vmax or (major <= vmax and count > int(record['count']/1000)):
-            pruned[version] = count
-            total += int(count)
+        if 'a1' not in version:
+            if major == vmax or (major <= vmax and count > int(record['count']/1000)):
+                pruned[version] = count
+                total += int(count)
 
     pruned[str(vmin) + ' and below'] = pruned.pop(str(vmin))
 
@@ -202,5 +203,4 @@ build_beta_aggregate(data['json'], 102)
 
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
-
 
