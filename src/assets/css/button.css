@@ -1,0 +1,37 @@
+.primary-button {
+  color: var(--color-white);
+  background-color: var(--color-blue-50);
+}
+
+.button {
+  color: var(--layout-color-1);
+  border: 1px var(--layout-border-1) solid;
+  background: var(--layout-background-3);
+  border-radius: 3px;
+  padding-left: 6px;
+  padding-right: 6px;
+  margin: 6px;
+  font-size: 13px;
+  height: 32px;
+}
+
+.button:hover {
+  background-color: var(--layout-background-2);
+}
+
+.button:active {
+  background-color: var(--layout-background-4);
+}
+
+.button:focus {
+  box-shadow: 0 0 0 1px #0a84ff inset, 0 0 0 1px #0a84ff, 0 0 0 4px rgba(10, 132, 255, 0.3);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.button-selected {
+  background-color: var(--color-blue-50);
+}

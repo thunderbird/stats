@@ -1,0 +1,94 @@
+<style>
+
+  /* Applied with js */
+  .active {
+    font-weight: 700;
+  }
+
+  nav {
+    width: 100%;
+  }
+
+  .wrap {
+    display: flex;
+  }
+
+  header {
+    margin: 2rem;
+  }
+
+  ul {
+    display: flex;
+    list-style: none;
+    font-size: 17px;
+    font-weight: 400;
+    padding: 0;
+    flex-direction: var(--collapse-header);
+  }
+
+  li {
+    align-self: center;
+  }
+
+  .nav-link {
+    display: inline-flex;
+    margin: 0.5rem;
+  }
+
+  .nav-link, .nav-link:visited {
+    color: var(--anchor-color);
+    text-decoration: none;
+  }
+
+  .nav-link:hover, .nav-link:active, .nav-link:focus {
+    text-decoration: underline;
+  }
+
+  .nav-link:active {
+    color: var(--anchor-active-color);
+  }
+
+  .nav-link:focus {
+    box-shadow: 0 0 0 2px #0a84ff, 0 0 0 6px rgba(10, 132, 255, 0.3);
+  }
+
+  .logo {
+    display: var(--display-logo);
+    content: var(--logo-url);
+    width: 350px;
+    padding-bottom: 2rem;
+  }
+</style>
+<header>
+  <div class="wrap">
+    <div class="logo"></div>
+    <nav>
+      <ul>
+        <li>
+          <a id="ami" class="nav-link" href="/ami.html">Monthly Release Active Installations</a>
+        </li>
+        <li>
+          <a id="adi" class="nav-link" href="/index.html">Daily Release Active Installations</a>
+        </li>
+        <li>
+          <a id="beta" class="nav-link" href="/beta.html">Beta/Nightly Daily Installations</a>
+        </li>
+        <li>
+          <a id="version" class="nav-link" href="/version.html">ADI by Version</a>
+        </li>
+        <li>
+          <a id="addons" class="nav-link" href="/addons.html">Add-on Users</a>
+        </li>
+        <li>
+          <a id="platlang" class="nav-link" href="/platlang.html">Platforms & Languages</a>
+        </li>
+        <li>
+          <a id="financials" class="nav-link" href="/financials.html">Donations and Spending</a>
+        </li>
+        <li>
+          <a id="telemetry" class="nav-link" href="/telemetry.html">Telemetry</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</header>
