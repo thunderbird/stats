@@ -7,12 +7,24 @@ $( document ).ready(function() {
     for (let i in tabs) {
         if (window.location.hash == "#" + tabs[i]) {
             $("#tab"+i).prop('checked', true);
+
+            if (tabs[i] === 'telemetry') {
+                load_telemetry();
+            }
         }
 
         $("#" + tabs[i] +"_tab").click(function() {
             $("#tab"+i).prop('checked', true);
         });
     }
+
+
+    window.addEventListener('hashchange', (evt) => {
+        if (evt.newURL.indexOf('telemetry') !== -1) {
+            load_telemetry();
+        }
+    });
+
 });
 
 function format_financial_data(content) {
@@ -433,28 +445,39 @@ common_options = {
     },
 }
 
-$.getJSON('telemetry.json', function(data) {
-    let i = 0;
-    for (let key in data) {
-        i++;
-        var adi = format_beta_adi(data[key]);
-        var opt = telemetry_options;
-        Object.assign(opt, common_options);
-        opt.series = adi['betas'];
-        opt.title = {text: 'Weekly users by <b>'+key+'</b>'};
-        Highcharts.stockChart('probe'+i.toString(), opt);
-        opt2 = {};
-        opt2.title = {text: 'Users by <b>'+key+'</b> for latest week in <b>log scale</b>'};
-        opt2.series = adi['latest'];
-        opt2.chart = {type: 'column', 'height': 500};
-        opt2.yAxis = {type: 'logarithmic', min: 1, max: 10000000};
-        opt2.xAxis = {visible: false};
-        opt2.colors = ['#33b8ff','#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3',
-        '#b71c1c', '#512e5f', '#3498db', '#1abc9c', '#f1c40f', '#f39c12', '#d35400', '#2e4053',
-        '#e91e63', '#cd6155', '#c39bd3', '#aed6f1', '#82e0aa', '#fad7a0'];
-        Highcharts.chart('probe'+i+'a', opt2);
+let telemetry_loaded = false;
+function load_telemetry() {
+    if (telemetry_loaded) {
+        return;
     }
-});
+    
+    telemetry_loaded = true;
+    $.getJSON('telemetry.json', function(data) {
+        let i = 0;
+        for (let key in data) {
+            i++;
+            var adi = format_beta_adi(data[key]);
+            var opt = telemetry_options;
+            Object.assign(opt, common_options);
+            opt.series = adi['betas'];
+            opt.title = {text: 'Weekly users by <b>' + key + '</b>'};
+            Highcharts.stockChart('probe' + i.toString(), opt);
+            opt2 = {};
+            opt2.title = {text: 'Users by <b>' + key + '</b> for latest week in <b>log scale</b>'};
+            opt2.series = adi['latest'];
+            opt2.chart = {type: 'column', 'height': 500};
+            opt2.yAxis = {type: 'logarithmic', min: 1, max: 10000000};
+            opt2.xAxis = {visible: false};
+            opt2.colors = ['#33b8ff', '#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3',
+                '#b71c1c', '#512e5f', '#3498db', '#1abc9c', '#f1c40f', '#f39c12', '#d35400', '#2e4053',
+                '#e91e63', '#cd6155', '#c39bd3', '#aed6f1', '#82e0aa', '#fad7a0'];
+            Highcharts.chart('probe' + i + 'a', opt2);
+        }
+
+        // Remove the little "Loading..." message
+        document.getElementById('telemetry-loading').remove();
+    });
+}
 
 $.getJSON('financials.json', function(data) {
     let donations = format_financial_data(data);
