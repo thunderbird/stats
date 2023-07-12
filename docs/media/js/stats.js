@@ -555,8 +555,16 @@ $.getJSON('beta_nightly_adi.json', function(data) {
     var adi = format_beta_adi(data);
     var opt = beta_adi_options;
     opt.series = adi['betas'];
-    opt.title = {text: 'Active Beta and Nightly Installations after 102'};
+    opt.title = {text: 'Active Beta and Nightly Installations after 115'};
     Highcharts.stockChart('line_beta_adi', opt);
+});
+
+$.getJSON('102beta_nightly_adi.json', function(data) {
+    var adi = format_beta_adi(data);
+    var opt = beta_adi_options;
+    opt.series = adi['betas'];
+    opt.title = {text: '102-115 Beta history'};
+    Highcharts.stockChart('102line_beta_adi', opt);
 });
 
 $.getJSON('91beta_nightly_adi.json', function(data) {
