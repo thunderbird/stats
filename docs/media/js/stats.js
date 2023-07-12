@@ -450,7 +450,7 @@ function load_telemetry() {
     if (telemetry_loaded) {
         return;
     }
-    
+
     telemetry_loaded = true;
     $.getJSON('telemetry.json', function(data) {
         let i = 0;
@@ -581,6 +581,16 @@ $.getJSON('68beta_nightly_adi.json', function(data) {
     opt.series = adi['betas'];
     opt.title = {text: '69-78 Beta history'};
     Highcharts.stockChart('68line_beta_adi', opt);
+});
+
+
+$.getJSON('115uptake.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = adi_uptake_options;
+    opt.series = adi['uptake'];
+    opt.rangeSelector = {selected: 4};
+    opt.title = {text: 'TB115 Uptake as % of ADI'};
+    Highcharts.stockChart('115uptake', opt)
 });
 
 $.getJSON('102uptake.json', function(data) {
