@@ -6,7 +6,7 @@ import tools
 from pathlib import Path
 
 # First date we produced these stats.
-start_date = datetime.date(2023, 6, 1)
+start_date = datetime.date(2020, 1, 1)
 filename = Path(__file__).parent / '../docs/sumo.json'
 counts = tools.parse_cached_json(filename)
 counts = counts['json']
