@@ -1,7 +1,7 @@
 $( document ).ready(function() {
     // Yeah all of this is a horrible hack just to make the tabs linkable.
     let tabs = ["ami", "default", "beta", "version", "addons",
-                "platlang", "financials", "telemetry"];
+                "platlang", "financials", "telemetry", "support"];
 
     $("#tab1").prop('checked', true);
     for (let i in tabs) {
@@ -26,6 +26,16 @@ $( document ).ready(function() {
     });
 
 });
+
+function format_sumo_data(content) {
+    let series = {name: '# of questions', data: []}
+    for (let [key, count] of Object.entries(content)) {
+        let date = new Date(key);
+        series['data'].push([date.getTime(), count])
+    }
+    series['data'] = series['data'].sort((a, b) => a[0] - b[0]);
+    return series
+}
 
 function format_financial_data(content) {
     let data = {}
@@ -445,6 +455,31 @@ common_options = {
     },
 }
 
+sumo_options = {
+    chart: {
+        type: 'line'
+    },
+    rangeSelector:{
+        enabled:true,
+        selected: 4
+    },
+    xAxis: {
+        type: 'datetime',
+        title: {
+             text: 'Date'
+        }
+    },
+    legend: {
+        enabled: false
+    },
+    navigator: {
+        enabled: false
+    },
+    scrollbar: {
+        enabled: false
+    },
+}
+
 let telemetry_loaded = false;
 function load_telemetry() {
     if (telemetry_loaded) {
@@ -478,6 +513,17 @@ function load_telemetry() {
         document.getElementById('telemetry-loading').remove();
     });
 }
+
+$.getJSON('sumo.json', function(data) {
+    let q = format_sumo_data(data);
+
+    let opt = sumo_options;
+    opt.series = [q];
+    opt.colors = ['#ff0000', '#4169e1', '#2e8B57', '#ffa500', '#bA55d3'];
+    opt.title = {text: '<b># of Questions Per Day</b>'};
+    Highcharts.stockChart('sumo_questions', opt);
+
+});
 
 $.getJSON('financials.json', function(data) {
     let donations = format_financial_data(data);
