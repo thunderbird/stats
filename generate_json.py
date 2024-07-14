@@ -3,6 +3,7 @@ import csv
 import datetime
 import json
 import os
+import sys
 from dateutil.relativedelta import relativedelta
 
 start_date = datetime.date(2018, 8, 1)
@@ -61,6 +62,8 @@ def s3_json_read(date):
     try:
         data = infile.get()['Body'].read().splitlines(False)
     except s3.meta.client.exceptions.NoSuchKey:
+        print("File {0} not found in S3.".format(input_dir))
+        sys.exit(1)
         return {}
     else:
         return json.loads(data[0])
@@ -87,13 +90,23 @@ def parse_s3_data(date):
     # GROUP BY application.version
     sum = 0
     version_data = {}
+    bad_rows = 0
+
     for row in reader:
-        if row[1] == theme_guid and row[2] not in seamonkeys:
-            if row[2] in version_data:
-                version_data[row[2]] += int(row[3])
-            else:
-                version_data[row[2]] = int(row[3])
-            sum += int(row[3])
+        try:
+            if row[1] == theme_guid and row[2] not in seamonkeys:
+                if row[2] in version_data:
+                    version_data[row[2]] += int(row[3])
+                else:
+                    version_data[row[2]] = int(row[3])
+                sum += int(row[3])
+        except IndexError:
+            if bad_rows > 10:
+                print("Too many bad rows in csv file.")
+                sys.exit(1)
+            bad_rows += 1
+            pass
+
 
     if jsondata:
         version_data.update(jsondata['versions'])
