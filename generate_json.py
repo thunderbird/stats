@@ -210,10 +210,11 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print(daystring)
 
+build_aggregate(data['json'], 102, 128, datetime.date(2025, 12, 28))
 build_aggregate(data['json'], 91, 115, datetime.date(2024, 12, 28))
 build_aggregate(data['json'], 78, 102, datetime.date(2023, 12, 28))
 build_aggregate(data['json'], 68, 91, datetime.date(2023, 1, 2))
-build_beta_aggregate(data['json'], 115)
+build_beta_aggregate(data['json'], 128)
 
 with open(outfile_name, 'w') as outfile:
     json.dump(data['json'], outfile)
