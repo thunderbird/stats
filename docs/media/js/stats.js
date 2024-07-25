@@ -13,7 +13,15 @@ $( document ).ready(function() {
             }
         }
 
-        $("#" + tabs[i] +"_tab").click(function() {
+        document.getElementById('tab'+i).addEventListener('click', function(evt) {
+            $("#tab"+i).prop('checked', true);
+
+            // This code needs a gooooood update, and this chain is gross,
+            // but it should work as expected thanks to the static nature of the html
+            // ...sorry!
+            window.location.hash = evt.target.labels[0].children[0].href.split('#')[1];
+        });
+        document.getElementById(tabs[i] + '_tab').addEventListener('click', function() {
             $("#tab"+i).prop('checked', true);
         });
     }
