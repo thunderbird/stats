@@ -85,12 +85,20 @@
         "2017": 736285,
         "2018": 1205449
     },
-    "spending": [{"data":[
+    "spending_2022": [{"data":[
         {"name": "Personnel", "y": 79.8, "sliced": true},
         {"name": "Donation Transaction Fees", "y": 6.5},
         {"name": "General & Administrative", "y": 6.1},
         {"name": "Professional Services", "y": 5.1},
         {"name": "Computer & Technology", "y": 2.2},
         {"name": "Marketing & Communications", "y": 0.3}
+    ]}],
+    "spending": [{"data":[
+        {"name": "Personnel", "y": 68.2, "sliced": true},
+        {"name": "Infrastructure & Operational Services", "y": 13.9},
+        {"name": "Donation Processing Fees", "y": 7.6},
+        {"name": "General & Administrative", "y": 6.6},
+        {"name": "Marketing & Communications", "y": 2.0},
+        {"name": "Travel", "y": 1.7}
     ]}]
 }

@@ -405,7 +405,7 @@ yearly_options = {
     yAxis: {title: {text: '$ US'}},
     labels: {
         items: [{
-            html: 'Expense Breakdown for 2022',
+            html: 'Expense Breakdown for 2023',
             style: {
                 left: '150px',
                 top: '20px',
