@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html data-page="ami" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thunderbird Stats</title>
+  </head>
+  <body>
+    <div id="app">
+      <stats-header></stats-header>
+      <div class="dashboard">
+        <stats-ami>
+          <p slot="above">Note: AMIs are only a rough estimate of the number of active Thunderbird installations each month, they are not a count of users. <a class="external-link" href="https://wiki.mozilla.org/ADI">Learn More</a></p>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+          <!--<data-table id="data-table" slot="below" title="Weekly AMI Estimates" header='{"date": "Date", "count": "AMI"}'></data-table>-->
+        </stats-ami>
+      </div>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
