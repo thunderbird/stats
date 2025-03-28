@@ -564,7 +564,7 @@ $.getJSON('thunderbird_ami.json', function(data) {
     opt.xAxis.startOfWeek = 0; // Set start of week to Sundays.
     opt.title = {text: 'Monthly Active Installations for Release channel'};
     Highcharts.stockChart('line_ami', opt);
-    $('#ami').DataTable( {
+    $('#ami_table').DataTable( {
         "searching": true,
         "bPaginate": true,
         "bInfo" : false,
