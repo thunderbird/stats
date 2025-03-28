@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html data-page="telemetry" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thunderbird Stats</title>
+  </head>
+  <body>
+    <div id="app">
+      <stats-header></stats-header>
+      <div class="dashboard">
+        <stats-account-count>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-account-count>
+      </div>
+      <div class="dashboard">
+        <stats-account-count log>
+        </stats-account-count>
+      </div>
+      <div class="dashboard">
+        <stats-account-successful-email-setup>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-account-successful-email-setup>
+      </div>
+      <div class="dashboard">
+        <stats-account-successful-email-setup log>
+        </stats-account-successful-email-setup>
+      </div>
+      <div class="dashboard">
+        <stats-account-failed-email-setup>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-account-failed-email-setup>
+      </div>
+      <div class="dashboard">
+        <stats-account-failed-email-setup log>
+        </stats-account-failed-email-setup>
+      </div>
+      <div class="dashboard">
+        <stats-filelink-uploaded-size>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-filelink-uploaded-size>
+      </div>
+      <div class="dashboard">
+        <stats-filelink-uploaded-size log>
+        </stats-filelink-uploaded-size>
+      </div>
+      <div class="dashboard">
+        <stats-mails-read-secure>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-mails-read-secure>
+      </div>
+      <div class="dashboard">
+        <stats-mails-read-secure log>
+        </stats-mails-read-secure>
+      </div>
+      <div class="dashboard">
+        <stats-websearch-usage>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-websearch-usage>
+      </div>
+      <div class="dashboard">
+        <stats-websearch-usage log>
+        </stats-websearch-usage>
+      </div>
+      <div class="dashboard">
+        <stats-addressbook-count>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-addressbook-count>
+      </div>
+      <div class="dashboard">
+        <stats-addressbook-count log>
+        </stats-addressbook-count>
+      </div>
+      <div class="dashboard">
+        <stats-calendar-count>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-calendar-count>
+      </div>
+      <div class="dashboard">
+        <stats-calendar-count log>
+        </stats-calendar-count>
+      </div>
+      <div class="dashboard">
+        <stats-readonly-calendar-count>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-readonly-calendar-count>
+      </div>
+      <div class="dashboard">
+        <stats-readonly-calendar-count log>
+        </stats-readonly-calendar-count>
+      </div>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
