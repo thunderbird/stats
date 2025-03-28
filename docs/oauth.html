@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title></title>
+  <style>
+    h1, h2 {
+      text-align: center;
+    }
+    #issuers {
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    #issuers > li {
+      display: inline;
+      margin-inline: 1em;
+    }
+    .issuer {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .issuer > h2 {
+      grid-column: 1 / -1;
+    }
+  </style>
+  <script src="media/js/libs/highstock.js"></script>
+  <script src="media/js/libs/indicators.js"></script>
+  <script src="media/js/oauth.js"></script>
+</head>
+<body>
+  <h1>OAuth authentication requests</h1>
+  <div id="total"></div>
+</body>
+</html>
