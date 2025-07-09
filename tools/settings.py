@@ -3,7 +3,7 @@ region = 'us-east-1'
 # The first release version of Thunderbird that supported Telemetry.
 first_version = 78
 # List of recently released versions.
-release_version = [78, 91, 102, 115, 128]
+release_version = [78, 91, 102, 115, 128, 140]
 
 # Add-ons to ignore when counting users.
 ignore_addon_guids = [

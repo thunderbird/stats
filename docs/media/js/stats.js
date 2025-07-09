@@ -609,8 +609,16 @@ $.getJSON('beta_nightly_adi.json', function(data) {
     var adi = format_beta_adi(data);
     var opt = beta_adi_options;
     opt.series = adi['betas'];
-    opt.title = {text: 'Active Beta and Nightly Installations after 128'};
+    opt.title = {text: 'Active Beta and Nightly Installations after 140'};
     Highcharts.stockChart('line_beta_adi', opt);
+});
+
+$.getJSON('128beta_nightly_adi.json', function(data) {
+  var adi = format_beta_adi(data);
+  var opt = beta_adi_options;
+  opt.series = adi['betas'];
+  opt.title = {text: '128-140 Beta history'};
+  Highcharts.stockChart('128line_beta_adi', opt);
 });
 
 $.getJSON('115beta_nightly_adi.json', function(data) {
@@ -654,6 +662,15 @@ $.getJSON('68beta_nightly_adi.json', function(data) {
 });
 
 // ESR version uptake
+
+$.getJSON('140uptake.json', function(data) {
+    var adi = format_adi_data(data);
+    var opt = adi_uptake_options;
+    opt.series = adi['uptake'];
+    opt.rangeSelector = {selected: 4};
+    opt.title = {text: 'TB140 Uptake as % of ADI'};
+    Highcharts.stockChart('140uptake', opt)
+});
 
 $.getJSON('128uptake.json', function(data) {
     var adi = format_adi_data(data);
