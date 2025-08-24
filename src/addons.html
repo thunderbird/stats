@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html data-page="addons" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thunderbird Stats</title>
+  </head>
+  <body>
+    <div id="app">
+      <stats-header></stats-header>
+      <div class="dashboard">
+        <stats-addons>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-addons>
+        <stats-addons-2020>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="1">1m</chart-zoom-option>
+            <chart-zoom-option start="3">3m</chart-zoom-option>
+            <chart-zoom-option start="6">6m</chart-zoom-option>
+            <chart-zoom-option start="12">1yr</chart-zoom-option>
+            <chart-zoom-option scale="absolute" start="0">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-addons-2020>
+        <p>Note: This statistic became inaccurate following the release of Thunderbird 78. The bottom graph shows the old stats before they became inaccurate, and the top one uses Telemetry data for accurate stats reflecting TB78 and above.</p>
+      </div>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
