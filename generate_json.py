@@ -138,14 +138,14 @@ def aggregate_versions(record, vmin, vmax):
         except ValueError:
             pass
 
-    # Prune data points that have less than 1/1000th(0.1%) of users to clean up graph,
+    # Prune data points that have less than 1/500th(0.2%) of users to clean up graph,
     # this is usually random old beta versions. Also adjust total accordingly so we
     # still sum to 100%. Never prune vmax.
     pruned = {}
     for version, count in majors.iteritems():
         major = int(version.split('.')[0])
         if 'a1' not in version:
-            if major == vmax or (major <= vmax and count > int(record['count']/1000)):
+            if major == vmax or (major <= vmax and count > int(record['count']/500)):
                 pruned[version] = count
                 total += int(count)
 
@@ -210,7 +210,7 @@ for d in range(daterange.days):
     data['json'][daystring] = day_data
     print(daystring)
 
-build_aggregate(data['json'], 128, 140, datetime.date(2026, 12, 28))
+build_aggregate(data['json'], 115, 140, datetime.date(2026, 12, 28))
 build_aggregate(data['json'], 102, 128, datetime.date(2025, 12, 28))
 build_aggregate(data['json'], 91, 115, datetime.date(2024, 12, 28))
 build_aggregate(data['json'], 78, 102, datetime.date(2023, 12, 28))
