@@ -107,12 +107,20 @@
         {"name": "Computer & Technology", "y": 2.2},
         {"name": "Marketing & Communications", "y": 0.3}
     ]}],
-    "spending": [{"data":[
+    "spending_2023": [{"data":[
         {"name": "Personnel", "y": 68.2, "sliced": true},
         {"name": "Infrastructure & Operational Services", "y": 13.9},
         {"name": "Donation Processing Fees", "y": 7.6},
         {"name": "General & Administrative", "y": 6.6},
         {"name": "Marketing & Communications", "y": 2.0},
         {"name": "Travel", "y": 1.7}
+    ]}],
+    "spending": [{"data":[
+        {"name": "Personnel", "y": 69, "sliced": true},
+        {"name": "Infrastructure & Operational Services", "y": 11},
+        {"name": "Donation Processing Fees", "y": 10},
+        {"name": "General & Administrative", "y": 6},
+        {"name": "Marketing & Community", "y": 2},
+        {"name": "Meetings & Travel", "y": 2}
     ]}]
 }
