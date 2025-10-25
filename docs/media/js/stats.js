@@ -568,8 +568,9 @@ $.getJSON('thunderbird_ami.json', function(data) {
         value: Date.UTC(2025, 4, 4), // May 4, 2025 (month is 0-indexed)
         dashStyle: 'dash',
         label: {
-            text: 'Glean Telemetry Started',
+            text: 'Glean Begins',
             align: 'right',
+            verticalAlign: 'middle',
             style: {
                 color: '#FF0000',
                 fontWeight: 'bold'
