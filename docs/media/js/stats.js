@@ -558,7 +558,7 @@ $.getJSON('financials.json', function(data) {
 
 $.getJSON('thunderbird_ami.json', function(data) {
     var ami = format_ami_data(data);
-    var opt = user_count_options;
+    var opt = JSON.parse(JSON.stringify(user_count_options));
     opt.chart.type = 'areaspline'
     opt.series = [{name: "AMI", id: "ami", data: ami['graph']}];
     opt.xAxis.startOfWeek = 0; // Set start of week to Sundays.
