@@ -562,6 +562,21 @@ $.getJSON('thunderbird_ami.json', function(data) {
     opt.chart.type = 'areaspline'
     opt.series = [{name: "AMI", id: "ami", data: ami['graph']}];
     opt.xAxis.startOfWeek = 0; // Set start of week to Sundays.
+    opt.xAxis.plotLines = [{
+        color: '#FF0000',
+        width: 2,
+        value: Date.UTC(2025, 4, 4), // May 4, 2025 (month is 0-indexed)
+        dashStyle: 'dash',
+        label: {
+            text: 'Glean Telemetry Started',
+            align: 'right',
+            style: {
+                color: '#FF0000',
+                fontWeight: 'bold'
+            }
+        },
+        zIndex: 5
+    }];
     opt.title = {text: 'Monthly Active Installations for Release channel'};
     Highcharts.stockChart('line_ami', opt);
     $('#ami_table').DataTable( {

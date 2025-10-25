@@ -2,6 +2,8 @@ s3bucket ='s3://thunderbird-telemetry1/results/'
 region = 'us-east-1'
 # The first release version of Thunderbird that supported Telemetry.
 first_version = 78
+# The first release version of Thunderbird that supported Glean telemetry.
+first_glean_version = 128
 # List of recently released versions.
 release_version = [78, 91, 102, 115, 128, 140]
 
