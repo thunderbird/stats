@@ -1,0 +1,14 @@
+import ADIUptake102 from './adi-uptake-102.js';
+
+export default class ADIUptake78 extends ADIUptake102 {
+  _title = 'TB78 Uptake as % of ADI';
+
+  _data = {};
+
+  async fetchData() {
+    const response = await fetch('/data/78uptake.json');
+    this._data = await response.json();
+  }
+}
+
+customElements.define('stats-uptake-adi-78', ADIUptake78);

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html data-page="financials" lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thunderbird Stats</title>
+  </head>
+  <body>
+    <div id="app">
+      <stats-header></stats-header>
+      <div class="dashboard">
+        <stats-monthly-donations>
+          <chart-zoom slot="above">
+            <chart-zoom-option reset>All</chart-zoom-option>
+            <chart-zoom-option start="6" end="_current">6m</chart-zoom-option>
+            <chart-zoom-option start="0" end="_current">YTD</chart-zoom-option>
+          </chart-zoom>
+        </stats-monthly-donations>
+        <stats-expenses-breakdown></stats-expenses-breakdown>
+        <stats-donation-breakdown></stats-donation-breakdown>
+      </div>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
