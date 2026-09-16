@@ -5,7 +5,7 @@ first_version = 78
 # The first release version of Thunderbird that supported Glean telemetry.
 first_glean_version = 128
 # List of recently released versions.
-release_version = [78, 91, 102, 115, 128, 140]
+release_version = [78, 91, 102, 115, 128, 140, 153]
 
 # Add-ons to ignore when counting users.
 ignore_addon_guids = [

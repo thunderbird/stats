@@ -11,6 +11,7 @@ start_date = datetime.date(2020, 12, 27)
 glean_cutoff_date = datetime.date(2025, 5, 4)
 adi_filename = Path(__file__).parent / '../docs/thunderbird_adi.json'
 filename = Path(__file__).parent / '../docs/thunderbird_ami.json'
+uptake_153_filename = Path(__file__).parent / '../docs/153uptake.json'
 uptake_140_filename = Path(__file__).parent / '../docs/140uptake.json'
 uptake_128_filename = Path(__file__).parent / '../docs/128uptake.json'
 # Number of days to query between, SQL Between is inclusive so this is
@@ -72,12 +73,14 @@ def percent_represented(end_date):
 
     if end_date >= glean_cutoff_date:
         # Load uptake files for Glean-era data
+        uptake_153 = tools.parse_cached_json(uptake_153_filename)['json']
         uptake_140 = tools.parse_cached_json(uptake_140_filename)['json']
         uptake_128 = tools.parse_cached_json(uptake_128_filename)['json']
         version_threshold = settings.first_glean_version
 
-        # Try 140uptake first (for more recent dates), fall back to 128uptake
-        data = uptake_140.get(daystring) or uptake_128.get(daystring)
+        # Try the newest uptake data first, then fall back through older releases.
+        data = (uptake_153.get(daystring) or uptake_140.get(daystring)
+                or uptake_128.get(daystring))
 
         if data:
             total_count = data['count']
