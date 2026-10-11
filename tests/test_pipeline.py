@@ -179,3 +179,18 @@ def test_incomplete_day_is_rejected_before_athena():
          'LastModified': dt.datetime(2026, 10, 10, tzinfo=dt.UTC)}]}]
     with pytest.raises(ValueError, match='hourly'):
         source_manifest(s3, 'atn', '2026-10-10')
+
+
+def test_release_bumps_do_not_expand_legacy_feature_denominators(monkeypatch):
+    from tools import settings, tools
+    monkeypatch.setattr(settings, 'release_version', [153, 160])
+    query = object.__new__(tools.AthenaQuery)
+    query.date, query.versions, query.totalusers = dt.date(2026, 10, 4), [], None
+    query.cursor = Mock()
+    query.cursor.fetchall.side_effect = [[{'key': '1', 'count': 10}], [{'_col0': 42}]]
+    query.keyedscalar_users('tb.account.count')
+    assert query.totalusers == 42
+    for call in query.cursor.execute.call_args_list:
+        assert "LIKE '%140%'" in call.args[0]
+        assert "LIKE '%153%'" not in call.args[0]
+        assert "LIKE '%160%'" not in call.args[0]

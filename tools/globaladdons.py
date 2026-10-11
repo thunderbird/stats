@@ -20,7 +20,7 @@ def collect(dataloc, through):
             dataloc[daystring] = {}
             print(daystring)
             curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
-            q = tools.TotalAddonUsers(curdate, num_days, settings.release_version)
+            q = tools.TotalAddonUsers(curdate, num_days, settings.legacy_telemetry_versions)
             d = {
                 "total": q.query_totalusers().totalusers,
                 "addon_count": q.addon_totalusers,
