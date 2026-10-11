@@ -7,7 +7,8 @@ import uuid
 import boto3
 from botocore.config import Config as BotoConfig
 
-from tools import globaladdons, monthlyusers, platlang, scalars, settings, sumo
+from tools import globaladdons, monthlyusers, platlang, scalars, settings
+from . import sumo
 from .adi import build_derived
 from .cloudfront import SEAMONKEY, THEME, adi_record, collect, source_manifest
 from .common import atomic_json, dates, json_bytes, utc_today
@@ -29,6 +30,8 @@ def handoff(store, manifest):
 
 def run(config, directory, revision, *, through=None, start=None, component="metrics", max_days=32, refresh_week=None):
     through = through or utc_today() - dt.timedelta(days=1)
+    if component == "sumo":
+        through = min(through, sumo.latest_complete_day())
     if through >= utc_today():
         raise ValueError("Only complete UTC days can be processed")
     if config.prefix == "stage":
@@ -48,7 +51,9 @@ def run(config, directory, revision, *, through=None, start=None, component="met
     checkpoints = copy.deepcopy(manifest["checkpoints"])
     run_id = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
     if component == "sumo":
-        atomic_json(directory / "sumo.json", sumo.collect(baseline["sumo.json"], through))
+        source_info = {}
+        atomic_json(directory / "sumo.json", sumo.collect(baseline["sumo.json"], through,
+                                                        source_info=source_info))
     else:
         adi = baseline["thunderbird_adi.json"].copy()
         latest = dt.date.fromisoformat(max(adi))
@@ -103,6 +108,10 @@ def run(config, directory, revision, *, through=None, start=None, component="met
             atomic_json(directory / name, fn(existing, through))
     summary = validate(directory, baseline, through if component == "metrics" else None)
     checkpoints[component] = {"through": through.isoformat(), "summary": summary}
+    if component == "sumo":
+        # Keep the exact upstream revision/file hashes with the durable snapshot.
+        checkpoints[component]["source"] = source_info or manifest["checkpoints"].get(
+            "sumo", {}).get("source", {})
     saved = store.snapshot(directory, run_id, checkpoints, revision, etag)
     handoff(store, saved)
     logging.info("Validated snapshot %s", run_id)

@@ -21,8 +21,12 @@ migration, not an automatic release-list bump.
 GitHub runs `process.yml` at **04:00 UTC**, processing the previous UTC day.
 Weekly metrics retain their Sunday date anchors. `sumo.yml` also runs at 04:00,
 independently, so an upstream SUMO failure does not prevent other publication.
+SUMO retains its historical Pacific day boundary: at 04:00 UTC the preceding
+Pacific day is still in progress, so it imports only through the last complete
+Pacific day. It also requires the upstream refresh watermark to cover that day.
 Both use one concurrency group. GitHub scheduling is best effort; missing days
-are recovered from the saved data, with a 32-day bound per invocation.
+are recovered from the saved data. The 32-day bound applies to Athena metrics;
+the inexpensive SUMO CSV import fills all missing days in one invocation.
 
 The scheduled workflow lives on `master`. Production static files come from
 `prod`; staging comes from `stage`. Code pushes to those branches deploy the
@@ -222,12 +226,40 @@ restoring legacy producers. GitHub's normal failed-workflow notifications
 report failures. A public repository schedule may be disabled after inactivity;
 include that check in operational monitoring.
 
-## Known upstream issue and rollback
+## SUMO source and history
 
-SUMO's existing dataset ends on **2026-04-02**. Its API currently returns an HTML
-browser challenge to both the processing host and GitHub runners. The independent SUMO workflow fails
-explicitly and preserves the previous dataset; it never fills missing days with
-zero. Resolve upstream access before claiming that the series is current.
+SUMO imports public daily question CSVs from
+[`thunderbird/aaq-scraper`](https://github.com/thunderbird/aaq-scraper). That
+project owns API access and collection. Stats needs no SUMO credentials,
+browser, allowlisted runner, or additional GitHub secret.
+
+Each import resolves `main` once and fetches every file at that immutable Git
+revision. UTC creation timestamps are grouped into `America/Los_Angeles` days,
+including daylight-saving transitions, to preserve the old API query's day
+boundary. Both adjacent UTC files are required for each Pacific day. Question
+IDs must be unique; product, timestamps, CSV structure, and the source refresh
+watermark are validated before any counts are saved. A valid header-only CSV
+can represent zero questions; a missing file or failed request cannot.
+
+Existing published dates are never recalculated. This preserves the history
+through **2026-04-02**, including questions later deleted from SUMO. New dates
+count all Thunderbird questions, including those marked as spam, matching the
+old unfiltered API query. Historical re-scrapes can differ because of deletions.
+The source revision, watermark, timezone, and input file hashes are recorded in
+the S3 snapshot's `checkpoints.sumo.source` metadata.
+
+To fill missing dates and publish production, run:
+
+```bash
+gh workflow run sumo.yml --ref master
+```
+
+The workflow validates the complete dataset, saves an immutable S3 snapshot,
+publishes the static site, and purges only `stats.thunderbird.net`. Staging uses
+the same validated data on its next deployment. Source failures preserve the
+last published counts and fail the independent job explicitly.
+
+## Rollback
 
 Before cutover, retain control's original crontab and complete dataset backup,
 ATN's original crontab, and each hostname's original Cloudflare DNS record.

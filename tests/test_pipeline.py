@@ -194,3 +194,43 @@ def test_release_bumps_do_not_expand_legacy_feature_denominators(monkeypatch):
         assert "LIKE '%140%'" in call.args[0]
         assert "LIKE '%153%'" not in call.args[0]
         assert "LIKE '%160%'" not in call.args[0]
+
+
+def test_sumo_snapshot_changes_only_sumo_and_keeps_source_provenance(tmp_path, monkeypatch):
+    from stats_pipeline import pipeline
+    from stats_pipeline.common import atomic_json
+
+    config = Config('bucket')
+    s3 = MemoryS3()
+    store = Store(s3, config)
+    baseline = {
+        'thunderbird_adi.json': {'2026-10-10': {'count': 10, 'versions': {}}},
+        'thunderbird_ami.json': {'2026-10-04': {'ami': 10, '78': 0.5, 'start_date': '2026-09-07'}},
+        'addon_stats.json': {'2026-10-04': {'total': 10, 'addon_count': 8, 'minustop10_count': 6}},
+        'platforms.json': {'2026-10-04': {'count': 10, 'versions': {}}},
+        'locales.json': {'2026-10-04': {'count': 10, 'versions': {}}},
+        'telemetry.json': {},
+        'sumo.json': {'2026-04-02': 35},
+    }
+    for name, data in baseline.items():
+        atomic_json(tmp_path / name, data)
+    original = store.snapshot(tmp_path, 'before', {}, 'old-code', None)
+    session = Mock()
+    session.client.return_value = s3
+    monkeypatch.setattr(pipeline.boto3, 'Session', lambda **kw: session)
+    monkeypatch.setattr(pipeline, 'utc_today', lambda: dt.date(2026, 10, 11))
+    monkeypatch.setattr(pipeline.sumo, 'latest_complete_day', lambda: dt.date(2026, 10, 9))
+
+    def collect(counts, through, *, source_info):
+        assert through == dt.date(2026, 10, 9)
+        source_info.update(revision='a' * 40, timezone='America/Los_Angeles')
+        return counts | {'2026-10-09': 50}
+
+    monkeypatch.setattr(pipeline.sumo, 'collect', collect)
+    saved = pipeline.run(config, tmp_path, 'new-code', component='sumo')
+    assert saved['checkpoints']['sumo']['through'] == '2026-10-09'
+    assert saved['checkpoints']['sumo']['source']['revision'] == 'a' * 40
+    for name in baseline:
+        if name != 'sumo.json':
+            assert saved['files'][name]['sha256'] == original['files'][name]['sha256']
+    assert json.loads((tmp_path / 'sumo.json').read_bytes()) == {'2026-04-02': 35, '2026-10-09': 50}
