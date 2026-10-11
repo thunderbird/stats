@@ -49,11 +49,11 @@ jobs:
           aws-region: us-west-2
       - run: uv sync --frozen --no-dev
       - run: npm ci --ignore-scripts
-      - run: uv run tb-stats restore --data .state --manifest .snapshot.json
+      - run: uv run --frozen --no-dev tb-stats restore --data .state --manifest .snapshot.json
       - name: Build static files
         run: |
           revision=$(git -C website rev-parse HEAD)
-          uv run tb-stats build --website website/docs --data .state --output dist --manifest .snapshot.json --revision "$revision"
+          uv run --frozen --no-dev tb-stats build --website website/docs --data .state --output dist --manifest .snapshot.json --revision "$revision"
       - name: Deploy files
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -65,4 +65,4 @@ jobs:
           TARGET: ${{ inputs.environment }}
         run: |
           revision=$(git -C website rev-parse HEAD)
-          uv run tb-stats finish-deploy --environment "$TARGET" --output dist --manifest .snapshot.json --revision "$revision"
+          uv run --frozen --no-dev tb-stats finish-deploy --environment "$TARGET" --output dist --manifest .snapshot.json --revision "$revision"

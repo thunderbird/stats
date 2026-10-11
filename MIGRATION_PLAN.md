@@ -1,12 +1,43 @@
 # Stats processing and hosting migration
 
-Status: implementation and isolated validation in progress. The S3 bucket,
-Athena workgroups, OIDC roles, Cloudflare static resources, narrowly scoped
-publishing/purge tokens, and GitHub environments are provisioned. Production
-cron and hostname routing remain unchanged until validation completes.
+Status: implemented and deployed on **2026-10-11**. GitHub Actions owns the
+04:00 UTC processing schedule, S3 holds generated state, both public hostnames
+use Cloudflare static hosting, and the local ATN consumer owns imports and
+post-processing. The replaced stats cron entries are disabled; unrelated cron
+jobs, old hosting and baseline backups are retained for rollback.
 
 The executable implementation and recovery commands are documented in
 [OPERATIONS.md](OPERATIONS.md).
+
+## Cutover evidence and remaining follow-up
+
+- Live GitHub runs verified AWS OIDC, Athena in both regions, Glean access,
+  complete daily collection, static publication and hostname-only cache purge.
+- Reprocessing October 10 reproduced the production ADI total of **5,116,161**.
+  Published MAU history is unchanged. The October 4 add-on, scalar,
+  platform and locale results were compared with the control-server baseline.
+- The legacy scalar denominator retains its previous version cohort through
+  140. A separate fresh query confirmed **2,436,057** legacy clients; adding
+  153 would have raised that denominator to **7,883,868** without adding scalar
+  observations. Release/uptake and Glean calculations still include 153.
+- All five ATN aggregation files matched the legacy output. The existing and
+  new file imports matched in a rolled-back transaction. A complete live
+  import, indexing, global-total verification and average-user update finished
+  successfully and saved its acknowledgement.
+- ATN's cumulative download total exceeded its old unsigned 32-bit column.
+  `global_stats.count` was widened to unsigned 64-bit after backing it up;
+  all **122,826** existing rows were preserved. Historical capped values were
+  not reconstructed.
+- Production and staging deployment checks verified complete static assets,
+  data hashes, independent branch mappings and the **one-hour** cache policy.
+  Publishing tokens were denied access to an unrelated Worker.
+- **39 tests and 8 subtests** pass, alongside Ruff and workflow validation.
+- SUMO remains an upstream issue: its API returns an HTML browser challenge
+  from both this host and GitHub. The separate job reports failure and retains
+  the last valid dataset, dated **2026-04-02**.
+- The first automatic 04:00 UTC cycle is **2026-10-12**. Manual end-to-end
+  validation is complete; observe that scheduled cycle and the next weekly
+  cycle before retiring the rollback resources.
 
 ## Agreed outcome
 
@@ -41,9 +72,8 @@ hand-maintained data such as financials.
   by the website, not only recently generated files.
 - Inventory current public paths, both hostname configurations, and effective
   HTTP headers. Preserve the one-hour HTTPS cache lifetime.
-- Confirm the canonical GitHub repository before configuring Actions and its
-  OIDC trust. The local origin is `thundernest/stats`; the deployment playbook
-  references `thunderbird/stats`.
+- The canonical GitHub repository is `thunderbird/stats`; both OIDC trust and
+  the local origin use that repository (the old `thundernest` URL redirects).
 
 Current production processing is scheduled on control in Pacific time:
 
@@ -81,9 +111,9 @@ day's S3 logs four hours to arrive. Late-log detection is still required.
 
 ## 3. Store generated state in S3
 
-Provision a dedicated bucket or clearly isolated prefix; its name has not yet
-been selected or created. Separate production data, staging experiments,
-Athena scratch/results, ATN handoff files, and completion manifests.
+Use the private, versioned bucket `thunderbird-stats-768512802988` in
+`us-west-2`. Separate production data, shadow experiments, Athena
+scratch/results, ATN handoff files, and completion manifests.
 
 Each run will:
 
@@ -134,8 +164,9 @@ code and installation configuration live in this repository:
    This handoff does not depend on successful website publication.
 2. A local consumer polls for ready dates, verifies the input set, and acquires
    a lock before importing. Use the existing instance role for S3 access.
-3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=s3`
-   and `index_stats --date=YYYY-MM-DD` management commands locally.
+3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=file`
+   and `index_stats --date=YYYY-MM-DD` management commands locally. File mode
+   imports the exact immutable bytes verified by the consumer.
 4. Record completion durably after successful work. Verify actual command
    idempotency and failure behavior before enabling retries or corrected-date
    imports; do not assume reruns are harmless.
@@ -160,10 +191,9 @@ environment. The instance currently has the `ec2-s3-read` profile with
   Check all referenced assets and the largest JSON file against hosting limits.
 - Provision separate production and staging hosting resources before issuing
   narrowly scoped deployment tokens. Initially verify them using preview URLs.
-- Associate production with `prod` and staging with `stage`. Neither checked
-  remote currently advertises `stage`; establish that branch and its deployment.
-  All three current web-server checkouts use `prod`, and the inspected Apache
-  configuration aliases staging to the production document root.
+- Associate production with `prod` and the newly created staging branch with
+  `stage`. The old three web-server checkouts used `prod`, and their Apache
+  configuration aliased staging to the production document root.
 - By default, staging reads a validated data snapshot. Stage deployments must
   not write production state or publish ATN completion manifests.
 - Create the two hostname connections using operator credentials when their

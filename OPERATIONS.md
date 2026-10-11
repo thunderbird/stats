@@ -11,6 +11,13 @@ retains the existing telemetry SQL and metric calculations. `generate_json.py`
 is a compatibility entry point; the complete pipeline uses `tb-stats collect`.
 Do not run the old `amo-ops`/`athenatools` jobs alongside the new pipeline.
 
+Legacy feature, add-on, platform and locale queries retain the production
+version cohort through 140 in `legacy_telemetry_versions`. The 153 release is
+still included in ADI/uptake and Glean MAU. Adding 153 to the legacy feature
+denominator changes percentages without adding matching feature observations
+in the current data; that requires a separate metric
+migration, not an automatic release-list bump.
+
 GitHub runs `process.yml` at **04:00 UTC**, processing the previous UTC day.
 Weekly metrics retain their Sunday date anchors. `sumo.yml` also runs at 04:00,
 independently, so an upstream SUMO failure does not prevent other publication.
@@ -82,6 +89,10 @@ MAU raw values are not replaced. `GLEAN_API_KEY` is required when a missing MAU
 point is due. Neither AWS access keys nor Cloudflare operator keys belong in
 the repository or GitHub workflows.
 
+For a credential check, add `-f verify_access=true` to a manual processing run.
+It also reads a legacy telemetry partition in `us-east-1` and validates the
+Glean API response, without changing either source.
+
 Initialize a namespace **only once**, using a reviewed copy of the full control
 server dataset, including its historical JSON files:
 
@@ -148,9 +159,36 @@ documents for removed add-ons need explicit reconciliation. This is safer than
 silently leaving stale search documents. The currently active import supports
 late-log additions automatically.
 
-The timer's `--first-day` is the first date the new producer owns. Earlier dates
+The timer's `--first-day` is **2026-10-11**, the first date the new producer owns.
+October 10 was imported once during end-to-end validation. Earlier dates
 were already imported by control and are deliberately skipped. Set it to the
 agreed cutover date, never to an arbitrary historical starting point.
+
+For an intentional ATN correction before that date, review the pending manifest
+set with a manual `--dry-run` and an explicitly chosen earlier `--first-day`.
+Use the same acknowledgement directory; keep the timer's normal boundary.
+
+To update the consumer, build its pinned image on the operator host and copy it
+over the existing SSH connection. This does not give GitHub access to ATN:
+
+```bash
+git archive HEAD | docker build -f deploy/atn.Dockerfile -t thunderbird-stats-atn:current -
+docker save thunderbird-stats-atn:current | gzip > stats-atn-image.tar.gz
+scp stats-atn-image.tar.gz centos@172.31.45.221:/home/centos/
+ssh centos@172.31.45.221 'sudo docker load -i /home/centos/stats-atn-image.tar.gz'
+```
+
+Build from committed source so local data, scratch files and credentials cannot
+enter the image. Wait for an active import to finish before restarting the service. The
+unit disables SELinux labeling for the consumer to access this host's existing
+Docker socket; it does not alter the running `addons-server` container.
+
+The migration also widened ATN's `global_stats.count` from unsigned 32-bit to
+unsigned 64-bit. Its cumulative download count exceeded 4,294,967,295 and the
+old asynchronous job swallowed the resulting database error. The operator SQL
+is retained in `deploy/atn-global-counts.sql`; a backup and full before/after
+comparison confirmed that all 122,826 existing rows survived unchanged. Older
+values already capped by the legacy column were not reconstructed.
 
 ```bash
 sudo systemctl status stats-atn.timer stats-atn.service
@@ -174,18 +212,22 @@ Worker; access must be denied. DNS/custom-domain attachment is a separate
 operator step. The purge token is zone-scoped; the application restricts the
 request to the target hostname.
 
+Staging shares the existing production stats exception from Cloudflare bot
+challenges. Without it, automated JSON requests to the newly proxied staging
+hostname receive an HTML challenge. No exception was added for other hosts.
+
 `STATS_SCHEDULE_ENABLED` and `STATS_DEPLOY_ENABLED` are explicit cutover switches.
-Keep them false while validating. GitHub's normal failed-workflow notifications
+Both are enabled after the October 11 cutover. Disable scheduling before
+restoring legacy producers. GitHub's normal failed-workflow notifications
 report failures. A public repository schedule may be disabled after inactivity;
 include that check in operational monitoring.
 
 ## Known upstream issue and rollback
 
 SUMO's existing dataset ends on **2026-04-02**. Its API currently returns an HTML
-browser challenge to the processing host. The independent SUMO workflow fails
+browser challenge to both the processing host and GitHub runners. The independent SUMO workflow fails
 explicitly and preserves the previous dataset; it never fills missing days with
-zero. Check the GitHub runner's response and resolve upstream access before
-claiming that the series is current.
+zero. Resolve upstream access before claiming that the series is current.
 
 Before cutover, retain control's original crontab and complete dataset backup,
 ATN's original crontab, and each hostname's original Cloudflare DNS record.
@@ -193,3 +235,8 @@ To roll back processing, disable the Actions schedule and ATN timer first,
 wait for active work to stop, restore the legacy schedules, then restore DNS
 only if reverting hosting too. Never allow two producers/importers to run.
 Leave old web hosts/data available until daily and weekly cycles are verified.
+
+For a later rollback, first restore the latest validated S3 JSON snapshot to
+the legacy data directories; the initial backup ends on the cutover date.
+Detach the selected Worker's custom domain before restoring that hostname's
+original CNAME. Keep the compatible 64-bit ATN count column; do not narrow it.

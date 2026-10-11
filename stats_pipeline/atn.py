@@ -41,7 +41,7 @@ def verify_artifacts(s3, bucket, manifest):
 def container_script(day, folder, validate_only=False, average_only=False):
     # Existing management command and Celery tasks do the actual work. A transaction
     # prevents the legacy delete-then-insert import from leaving a partial date.
-    source = '''import json
+    source = '''import logging
 from django.core.management import call_command
 from django.db import transaction, connection
 from django.conf import settings
@@ -51,6 +51,9 @@ from olympia.stats.models import UpdateCount
 from olympia.stats.cron import update_global_totals
 from olympia.stats import tasks as stat_tasks
 from olympia.addons.cron import update_addon_average_daily_users
+# The legacy importer logs every discarded request at DEBUG. Keep warnings and
+# failures without filling the host journal with tens of megabytes per date.
+logging.disable(logging.INFO)
 settings.CELERY_TASK_ALWAYS_EAGER = True
 settings.CELERY_TASK_EAGER_PROPAGATES = True
 assert current_app.conf.task_always_eager and current_app.conf.task_eager_propagates
@@ -90,7 +93,11 @@ def import_date():
         if VALIDATE:
             after = list(UpdateCount.objects.filter(date=DAY).order_by('addon_id').values(*fields))
             if before != after:
-                raise RuntimeError('ATN parity mismatch; import rolled back')
+                old = {r['addon_id']: r for r in before}
+                new = {r['addon_id']: r for r in after}
+                changed = [(key, [f for f in fields if old.get(key, {}).get(f) != new.get(key, {}).get(f)])
+                           for key in sorted(set(old) | set(new)) if old.get(key) != new.get(key)]
+                raise RuntimeError('ATN parity mismatch; import rolled back: ' + repr(changed[:10]))
             transaction.set_rollback(True)
             print('ATN import parity verified; transaction rolled back')
             return

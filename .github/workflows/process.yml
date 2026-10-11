@@ -15,6 +15,10 @@ on:
         type: choice
         options: [prod, shadow]
         default: shadow
+      verify_access:
+        description: 'Also verify legacy telemetry reads and the Glean API key'
+        type: boolean
+        default: false
 permissions:
   contents: read
   id-token: write
@@ -44,6 +48,24 @@ jobs:
           aws-region: us-west-2
           role-duration-seconds: 21600
       - run: uv sync --frozen --no-dev
+      - name: Verify telemetry and Glean access
+        if: inputs.verify_access
+        run: |
+          uv run --frozen --no-dev python - <<'PY'
+          import datetime as dt
+          import boto3
+          from stats_pipeline.athena import Athena
+          from stats_pipeline.common import utc_today
+          from stats_pipeline.config import Config
+          from tools.monthlyusers import query_glean_data
+          config = Config.from_env()
+          query = Athena(boto3.client('athena', region_name='us-east-1'), 'default',
+                         config.telemetry_workgroup, config.telemetry_results)
+          day = (utc_today() - dt.timedelta(days=1)).strftime('%Y/%m/%d')
+          assert query.rows(f"SELECT 1 FROM telemetry_data WHERE date = '{day}' LIMIT 1")
+          assert query_glean_data()
+          print('Telemetry source, Athena result access, and Glean key verified')
+          PY
       - name: Collect complete UTC days
         env:
           START: ${{ inputs.start }}
@@ -54,9 +76,9 @@ jobs:
           args=()
           if [[ -n "$START" ]]; then args+=(--start "$START"); fi
           if [[ -n "$THROUGH" ]]; then args+=(--through "$THROUGH"); fi
-          uv run tb-stats collect --data .state "${args[@]}"
+          uv run --frozen --no-dev tb-stats collect --data .state "${args[@]}"
       - name: Record validated snapshot
-        run: uv run tb-stats restore --data .state --manifest run-manifest.json
+        run: uv run --frozen --no-dev tb-stats restore --data .state --manifest run-manifest.json
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: validated-manifest
@@ -69,4 +91,3 @@ jobs:
       environment: production
       website_ref: prod
     secrets: inherit
-

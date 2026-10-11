@@ -42,10 +42,10 @@ class PlatLangUsers(tools.AthenaQuery):
         return result
 
 def run_locale_query(curdate, num_days):
-    return PlatLangUsers(curdate, num_days, settings.release_version).query_locales()
+    return PlatLangUsers(curdate, num_days, settings.legacy_telemetry_versions).query_locales()
 
 def run_platform_query(curdate, num_days):
-    return PlatLangUsers(curdate, num_days, settings.release_version).query_platforms()
+    return PlatLangUsers(curdate, num_days, settings.legacy_telemetry_versions).query_platforms()
 
 def collect(data, through, func):
     num_days = 6

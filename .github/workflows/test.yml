@@ -17,5 +17,4 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen
       - run: uv run pytest -q
-      - run: uv run ruff check stats_pipeline deploy/provision_aws.py tools/monthlyusers.py tools/tools.py tools/globaladdons.py tools/scalars.py tools/platlang.py tools/sumo.py
-
+      - run: uv run ruff check stats_pipeline tests deploy tools/monthlyusers.py tools/tools.py tools/globaladdons.py tools/scalars.py tools/platlang.py tools/sumo.py
