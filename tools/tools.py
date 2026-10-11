@@ -1,10 +1,14 @@
+if __package__:
+    from . import queries, settings
+else:
+    import queries
+    import settings
+
 import collections
 import datetime as dt
 import json
 import pyathena
-import queries
 import re
-import settings
 import urllib
 
 def collapse(data, stringcmp):
@@ -27,7 +31,8 @@ def flatten(data):
 
 
 # Athena data is stored in S3 using UTC, so use that to determine when to query.
-def date_range(start, increment, end=dt.datetime.now(dt.timezone.utc).date()):
+def date_range(start, increment, end=None):
+    end = end or dt.datetime.now(dt.timezone.utc).date()
     while start < end:
         yield start.strftime("%Y-%m-%d")
         start += dt.timedelta(days=increment)
@@ -45,7 +50,7 @@ def parse_cached_json(outfile_name):
 
 
 def get_page(url):
-    response = urllib.request.urlopen(url)
+    response = urllib.request.urlopen(url, timeout=60)
     json_response = json.loads(response.read())
     return json_response
 
@@ -60,24 +65,25 @@ def get_addon_guids():
     page_count = addon_data['page_count']
 
     print("Reading GUIDs from ATN API...")
-    for x in range(1, page_count):
+    for _ in range(1, page_count):
         for addon in addon_data['results']:
             addon_guids['main'].add(addon['guid'])
             if len(addon_guids['top10']) < 12:
                 addon_guids['top10'].add(addon['guid'])
-        addon_data = get_page(addon_data['next'])
+        if addon_data.get('next'):
+            addon_data = get_page(addon_data['next'])
     print("Done.")
     return addon_guids
 
 
 class AthenaQuery(object):
     """Class to do queries against Athena and return results."""
-    def __init__(self, date, versions = [], s3bucket=settings.s3bucket, region=settings.region):
-        self.cursor = cursor = pyathena.connect(s3bucket, region).cursor(pyathena.cursor.DictCursor)
+    def __init__(self, date, versions=None, s3bucket=None, region=None):
+        self.cursor = pyathena.connect(s3_staging_dir=s3bucket or settings.s3bucket, region_name=region or settings.region, work_group=settings.workgroup).cursor(pyathena.cursor.DictCursor)
         self.date = date
         self.data = None
         self.totalusers = None
-        self.versions = versions
+        self.versions = versions or []
 
     def _dateformat(self, num_days=0):
         """ Returns a date string with YYYY/MM/DD format(for Athena partitions) num_days
@@ -85,7 +91,7 @@ class AthenaQuery(object):
         """
         return (self.date - dt.timedelta(num_days)).strftime("%Y/%m/%d")
 
-    def _versioncond(self, versions=[]):
+    def _versioncond(self, versions=None):
         """ Returns a version condition to use in a query, like
         AND (application.version LIKE '%%91%%')
         """
@@ -145,7 +151,7 @@ class AthenaQuery(object):
 
 class TotalUsers(AthenaQuery):
     """ Get the total unique users for a set of versions over a time span of num_days, starting from date."""
-    def __init__(self, date, num_days, versions = [], s3bucket=settings.s3bucket, region=settings.region):
+    def __init__(self, date, num_days, versions=None, s3bucket=None, region=None):
         super().__init__(date, versions, s3bucket, region)
         self.num_days = num_days
 
@@ -160,7 +166,7 @@ class TotalUsers(AthenaQuery):
 
 class TotalAddonUsers(AthenaQuery):
     """ Get the total unique users for version over a time span of num_days, starting from date."""
-    def __init__(self, date, num_days, versions = [], s3bucket=settings.s3bucket, region=settings.region):
+    def __init__(self, date, num_days, versions=None, s3bucket=None, region=None):
         super().__init__(date, versions, s3bucket, region)
         self.num_days = num_days
         self.exclude = 0

@@ -1,0 +1,9 @@
+.git
+.venv
+node_modules
+docs
+.cache
+.state
+dist
+website
+**/__pycache__
