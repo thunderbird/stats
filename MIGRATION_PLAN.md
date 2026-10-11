@@ -41,9 +41,8 @@ hand-maintained data such as financials.
   by the website, not only recently generated files.
 - Inventory current public paths, both hostname configurations, and effective
   HTTP headers. Preserve the one-hour HTTPS cache lifetime.
-- Confirm the canonical GitHub repository before configuring Actions and its
-  OIDC trust. The local origin is `thundernest/stats`; the deployment playbook
-  references `thunderbird/stats`.
+- The canonical GitHub repository is `thunderbird/stats`; both OIDC trust and
+  the local origin use that repository (the old `thundernest` URL redirects).
 
 Current production processing is scheduled on control in Pacific time:
 
@@ -81,9 +80,9 @@ day's S3 logs four hours to arrive. Late-log detection is still required.
 
 ## 3. Store generated state in S3
 
-Provision a dedicated bucket or clearly isolated prefix; its name has not yet
-been selected or created. Separate production data, staging experiments,
-Athena scratch/results, ATN handoff files, and completion manifests.
+Use the private, versioned bucket `thunderbird-stats-768512802988` in
+`us-west-2`. Separate production data, shadow experiments, Athena
+scratch/results, ATN handoff files, and completion manifests.
 
 Each run will:
 
@@ -134,8 +133,9 @@ code and installation configuration live in this repository:
    This handoff does not depend on successful website publication.
 2. A local consumer polls for ready dates, verifies the input set, and acquires
    a lock before importing. Use the existing instance role for S3 access.
-3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=s3`
-   and `index_stats --date=YYYY-MM-DD` management commands locally.
+3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=file`
+   and `index_stats --date=YYYY-MM-DD` management commands locally. File mode
+   imports the exact immutable bytes verified by the consumer.
 4. Record completion durably after successful work. Verify actual command
    idempotency and failure behavior before enabling retries or corrected-date
    imports; do not assume reruns are harmless.
@@ -160,10 +160,9 @@ environment. The instance currently has the `ec2-s3-read` profile with
   Check all referenced assets and the largest JSON file against hosting limits.
 - Provision separate production and staging hosting resources before issuing
   narrowly scoped deployment tokens. Initially verify them using preview URLs.
-- Associate production with `prod` and staging with `stage`. Neither checked
-  remote currently advertises `stage`; establish that branch and its deployment.
-  All three current web-server checkouts use `prod`, and the inspected Apache
-  configuration aliases staging to the production document root.
+- Associate production with `prod` and the newly created staging branch with
+  `stage`. The old three web-server checkouts used `prod`, and their Apache
+  configuration aliased staging to the production document root.
 - By default, staging reads a validated data snapshot. Stage deployments must
   not write production state or publish ATN completion manifests.
 - Create the two hostname connections using operator credentials when their
