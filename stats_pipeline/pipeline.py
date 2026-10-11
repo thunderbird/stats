@@ -23,7 +23,7 @@ def handoff(store, manifest):
             continue
         ready = {"schema": 1, "day": day, "revision": value["revision"],
                  "artifacts": value["artifacts"]}
-        store.put(f"prod/atn/ready/{day}.json", json_bytes(ready))
+        store.ready(day, ready)
 
 
 def run(config, directory, revision, *, through=None, start=None, component="metrics", max_days=32, refresh_week=None):

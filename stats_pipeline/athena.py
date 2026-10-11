@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 import time
 
 import boto3
@@ -19,11 +20,13 @@ class Athena:
             WorkGroup=self.workgroup, ResultConfiguration={"OutputLocation": self.output}
         )["QueryExecutionId"]
         self.executions.append(qid)
+        logging.info('Waiting for Athena query %s', qid)
         deadline = time.monotonic() + self.timeout
         while True:
             execution = self.client.get_query_execution(QueryExecutionId=qid)["QueryExecution"]
             status = execution["Status"]
             if status["State"] == "SUCCEEDED":
+                logging.info('Athena query %s succeeded', qid)
                 return qid
             if status["State"] in {"FAILED", "CANCELLED"}:
                 raise RuntimeError(f"Athena {qid}: {status.get('StateChangeReason', status['State'])}")

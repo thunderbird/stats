@@ -44,7 +44,7 @@ def validate(directory, baseline=None, through=None):
                 if not nonnegative(record):
                     raise ValueError(f"Invalid SUMO record: {day}")
             elif name == "thunderbird_ami.json":
-                if not nonnegative(record.get("ami")) or not 0 < record.get("78", 0) <= 1:
+                if not nonnegative(record.get("ami")) or record["ami"] == 0 or not 0 < record.get("78", 0) <= 1:
                     raise ValueError(f"Invalid MAU record: {day}")
                 dt.date.fromisoformat(record["start_date"])
             elif name == "addon_stats.json":
@@ -54,6 +54,8 @@ def validate(directory, baseline=None, through=None):
                     raise ValueError(f"Inconsistent addon counts: {day}")
             else:
                 count_record(record, f"{name}/{day}")
+                if name == "thunderbird_adi.json" and record["count"] == 0:
+                    raise ValueError(f"Empty ADI: {day}")
                 if name == "thunderbird_adi.json" and sum(record["versions"].values()) > record["count"]:
                     raise ValueError(f"Inconsistent ADI: {day}")
     for scalar, records in data["telemetry.json"].items():

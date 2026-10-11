@@ -3,6 +3,7 @@ import datetime
 from pathlib import Path
 from stats_pipeline.common import atomic_json, http_session, utc_today
 import json
+import time
 
 start_date = datetime.date(2020, 1, 1)
 filename = Path(__file__).parent / '../docs/sumo.json'
@@ -25,6 +26,7 @@ def collect(counts, through):
         if type(count) is not int or count < 0:
             raise ValueError(f'Invalid SUMO count for {day}')
         counts[day.isoformat()] = count
+        time.sleep(2)
     return counts
 
 
