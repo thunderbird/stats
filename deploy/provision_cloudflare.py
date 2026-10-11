@@ -48,7 +48,7 @@ def provision_tokens(cf, cache):
             'name': name, 'policies': [{'effect': 'allow',
                 'resources': {'com.cloudflare.api.account.'+ACCOUNT: resources},
                 'permission_groups': [{'id': group_ids[permission]}]}]})
-        with path.open('x', opener=lambda p, flags: os.open(p, flags, 0o600)) as file:
+        with open(path, 'x', opener=lambda p, flags: os.open(p, flags, 0o600)) as file:
             json.dump(result, file)
         print(f'Created {name}: {result["id"]}')
 

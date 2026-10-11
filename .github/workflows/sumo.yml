@@ -29,7 +29,7 @@ jobs:
           aws-region: us-west-2
           role-duration-seconds: 10800
       - run: uv sync --frozen --no-dev
-      - run: uv run tb-stats collect --component sumo --data .state
+      - run: uv run --frozen --no-dev tb-stats collect --component sumo --data .state
   publish:
     needs: collect
     uses: ./.github/workflows/publish-static.yml
