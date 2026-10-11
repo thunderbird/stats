@@ -5,6 +5,7 @@ from pathlib import Path
 import uuid
 
 import boto3
+from botocore.config import Config as BotoConfig
 
 from tools import globaladdons, monthlyusers, platlang, scalars, settings, sumo
 from .adi import build_derived
@@ -36,7 +37,8 @@ def run(config, directory, revision, *, through=None, start=None, component="met
         raise ValueError("--refresh-week must be a completed Sunday")
     directory = Path(directory)
     session = boto3.Session(region_name=config.region)
-    s3 = session.client("s3")
+    s3 = session.client("s3", config=BotoConfig(max_pool_connections=16,
+                                                retries={"mode": "standard", "max_attempts": 4}))
     store = Store(s3, config)
     manifest, etag = store.current()
     if manifest is None:

@@ -38,35 +38,54 @@ def verify_artifacts(s3, bucket, manifest):
     return files
 
 
-def container_script(day, folder):
+def container_script(day, folder, validate_only=False, average_only=False):
     # Existing management command and Celery tasks do the actual work. A transaction
     # prevents the legacy delete-then-insert import from leaving a partial date.
-    return '''from django.core.management import call_command
+    return '''import json
+from django.core.management import call_command
 from django.db import transaction, connection
 from django.conf import settings
 from celery import current_app
 from olympia.amo.decorators import use_primary_db
 from olympia.stats.models import UpdateCount
 from olympia.stats.cron import update_global_totals
+from olympia.addons.cron import update_addon_average_daily_users
 settings.CELERY_TASK_ALWAYS_EAGER = True
 settings.CELERY_TASK_EAGER_PROPAGATES = True
 assert current_app.conf.task_always_eager and current_app.conf.task_eager_propagates
 @use_primary_db
 def import_date():
     cursor = connection.cursor()
+    cursor.execute("SELECT GET_LOCK('stats_pipeline_import', 0)")
+    if cursor.fetchone()[0] != 1:
+        raise RuntimeError('Another stats import is still executing in ATN')
+    # This connection owns the lock through import/index/post-processing. MySQL
+    # releases it when the process exits, including after a lost Docker client.
+    if AVERAGE:
+        update_addon_average_daily_users()
+        return
     cursor.execute('SHOW TABLE STATUS LIKE %s', ['update_counts'])
     assert cursor.fetchone()[1].lower() == 'innodb', 'Atomic imports require InnoDB'
     cursor.close()
     with transaction.atomic():
+        fields = ['addon_id', 'count', 'applications', 'locales', 'oses', 'statuses', 'versions']
+        before = list(UpdateCount.objects.filter(date=DAY).order_by('addon_id').values(*fields)) if VALIDATE else None
         previous = set(UpdateCount.objects.filter(date=DAY).values_list('addon_id', flat=True))
         call_command('update_counts_from_file', FOLDER, date=DAY, stats_source='file')
         current = set(UpdateCount.objects.filter(date=DAY).values_list('addon_id', flat=True))
         if not current or not previous.issubset(current):
             raise RuntimeError('Import removes existing addons; manual search reconciliation required')
+        if VALIDATE:
+            after = list(UpdateCount.objects.filter(date=DAY).order_by('addon_id').values(*fields))
+            if before != after:
+                raise RuntimeError('ATN parity mismatch; import rolled back')
+            transaction.set_rollback(True)
+            print('ATN import parity verified; transaction rolled back')
+            return
     call_command('index_stats', date=DAY)
     update_global_totals(DAY)
 import_date()
-'''.replace('DAY', repr(day)).replace('FOLDER', repr(folder))
+'''.replace('DAY', repr(day)).replace('FOLDER', repr(folder)).replace('VALIDATE', repr(validate_only)).replace('AVERAGE', repr(average_only))
 
 
 def exec_checked(container, command):
@@ -77,7 +96,7 @@ def exec_checked(container, command):
     return result.output.decode().strip()
 
 
-def import_date(container, manifest, files):
+def import_date(container, manifest, files, validate_only=False):
     folder = "stats-pipeline-" + uuid.uuid4().hex
     day = manifest["day"]
     tmp = exec_checked(container, ["python", "manage.py", "shell", "-c",
@@ -93,12 +112,12 @@ def import_date(container, manifest, files):
     if not container.put_archive(tmp, buffer.getvalue()):
         raise RuntimeError("Could not stage ATN files")
     try:
-        exec_checked(container, ["python", "manage.py", "shell", "-c", container_script(day, folder)])
+        exec_checked(container, ["python", "manage.py", "shell", "-c", container_script(day, folder, validate_only)])
     finally:
         exec_checked(container, ["rm", "-rf", "--", f"{tmp}/{folder}"])
 
 
-def consume(bucket, state_path, first_day, container_name, dry_run=False):
+def consume(bucket, state_path, first_day, container_name, dry_run=False, validate_only=False):
     state_path = Path(state_path)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     with (state_path.parent / 'consumer.lock').open('w') as lock:
@@ -127,10 +146,12 @@ def consume(bucket, state_path, first_day, container_name, dry_run=False):
         import docker
         container = docker.from_env().containers.get(container_name)
         for manifest, files in pending:
-            import_date(container, manifest, files)
+            import_date(container, manifest, files, validate_only)
+        if validate_only:
+            return
         # Run the dependent average only once all missing dates are present.
         exec_checked(container, ['python', 'manage.py', 'shell', '-c',
-                     "from django.conf import settings; settings.CELERY_TASK_ALWAYS_EAGER=True; settings.CELERY_TASK_EAGER_PROPAGATES=True; from celery import current_app; assert current_app.conf.task_always_eager and current_app.conf.task_eager_propagates; from olympia.addons.cron import update_addon_average_daily_users; update_addon_average_daily_users()"])
+                     container_script(None, None, average_only=True)])
         for manifest, _ in pending:
             state['completed'][manifest['day']] = manifest['revision']
         atomic_json(state_path, state)
@@ -143,8 +164,10 @@ def main():
     parser.add_argument('--first-day', type=dt.date.fromisoformat, required=True)
     parser.add_argument('--container', default='addons-server')
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--validate-only', action='store_true',
+                        help='Require parity with existing ATN rows and roll back every import')
     args = parser.parse_args()
-    consume(args.bucket, args.state, args.first_day, args.container, args.dry_run)
+    consume(args.bucket, args.state, args.first_day, args.container, args.dry_run, args.validate_only)
 
 
 if __name__ == '__main__':
