@@ -49,6 +49,7 @@ from celery import current_app
 from olympia.amo.decorators import use_primary_db
 from olympia.stats.models import UpdateCount
 from olympia.stats.cron import update_global_totals
+from olympia.stats import tasks as stat_tasks
 from olympia.addons.cron import update_addon_average_daily_users
 settings.CELERY_TASK_ALWAYS_EAGER = True
 settings.CELERY_TASK_EAGER_PROPAGATES = True
@@ -62,7 +63,18 @@ def import_date():
     # This connection owns the lock through import/index/post-processing. MySQL
     # releases it when the process exits, including after a lost Docker client.
     if AVERAGE:
-        update_addon_average_daily_users()
+        # The legacy function explicitly selects a replica, even inside the
+        # primary-db context. Use the primary for this short-lived process so
+        # its average includes the imports that just committed.
+        import multidb
+        original = multidb.get_slave
+        from django.db import router
+        primary = router.db_for_write(UpdateCount)
+        multidb.get_slave = lambda: primary
+        try:
+            update_addon_average_daily_users()
+        finally:
+            multidb.get_slave = original
         return
     cursor.execute('SHOW TABLE STATUS LIKE %s', ['update_counts'])
     assert cursor.fetchone()[1].lower() == 'innodb', 'Atomic imports require InnoDB'
@@ -84,12 +96,26 @@ def import_date():
             return
     call_command('index_stats', date=DAY)
     update_global_totals(DAY)
+    import datetime
+    date = datetime.datetime.strptime(DAY, '%Y-%m-%d').date()
+    jobs = stat_tasks._get_daily_jobs(date)
+    jobs.update(stat_tasks._get_metrics_jobs(date))
+    cursor = connection.cursor()
+    for name, calculate in jobs.items():
+        expected = calculate() or 0
+        cursor.execute('SELECT count FROM global_stats WHERE name=%s AND date=%s', [name, DAY])
+        result = cursor.fetchone()
+        if result is None or int(result[0]) != int(expected):
+            raise RuntimeError('Global totals verification failed: ' + name)
+    cursor.close()
 import_date()
 '''.replace('DAY', repr(day)).replace('FOLDER', repr(folder)).replace('VALIDATE', repr(validate_only)).replace('AVERAGE', repr(average_only))
 
 
 def exec_checked(container, command):
-    result = container.exec_run(command, workdir="/data/olympia")
+    # The production container already uses /data/olympia as its working
+    # directory. Its Docker API predates the exec workdir option.
+    result = container.exec_run(command)
     print(result.output.decode(errors='replace'), flush=True)
     if result.exit_code:
         raise RuntimeError(f"ATN command failed with exit {result.exit_code}")
