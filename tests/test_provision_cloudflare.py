@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from deploy.provision_cloudflare import ACCOUNT, ZONE, connect
+from deploy.provision_cloudflare import ACCOUNT, ZONE, connect, provision_tokens
 
 
 def test_failed_hostname_attachment_restores_only_target_record(tmp_path):
@@ -26,3 +26,17 @@ def test_hostname_attachment_never_replaces_another_worker(tmp_path):
     with pytest.raises(ValueError, match='different Worker'):
         connect(cf, tmp_path, 'staging')
     assert all(call.args[0] == 'GET' for call in cf.request.call_args_list)
+
+
+def test_new_tokens_are_saved_with_owner_only_permissions(tmp_path):
+    cf = Mock()
+    cf.request.side_effect = [
+        [{'name': 'Individual Workers Editor', 'id': 'editor'},
+         {'name': 'Cache Purge', 'id': 'purge'}],
+        [{'name': 'thunderbird-stats', 'id': 'production'},
+         {'name': 'thunderbird-stats-stage', 'id': 'staging'}],
+        *[{'id': name, 'value': 'test-value'} for name in ['production', 'staging', 'purge']]]
+    provision_tokens(cf, tmp_path)
+    paths = list(tmp_path.glob('*.json'))
+    assert len(paths) == 3
+    assert all(path.stat().st_mode & 0o777 == 0o600 for path in paths)
