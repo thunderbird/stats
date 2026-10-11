@@ -1,4 +1,7 @@
-s3bucket ='s3://thunderbird-telemetry1/results/'
+import os
+
+s3bucket = os.getenv('STATS_TELEMETRY_RESULTS', 's3://thunderbird-telemetry1/results/')
+workgroup = os.getenv('STATS_TELEMETRY_WORKGROUP', 'primary')
 region = 'us-east-1'
 # The first release version of Thunderbird that supported Telemetry.
 first_version = 78

@@ -1,0 +1,11 @@
+[Unit]
+Description=Import validated Thunderbird statistics into ATN
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=7200
+ExecStart=/usr/bin/docker run --rm --network host --name stats-atn-consumer -v /var/run/docker.sock:/var/run/docker.sock -v /home/centos/stats-state:/state:Z thunderbird-stats-atn:current --bucket thunderbird-stats-768512802988 --first-day 2026-10-11
+StandardOutput=journal
+StandardError=journal

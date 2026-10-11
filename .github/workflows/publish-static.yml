@@ -1,0 +1,68 @@
+name: Publish static bundle
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      website_ref:
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    env:
+      STATS_BUCKET: ${{ vars.STATS_BUCKET }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check target mapping
+        env:
+          TARGET: ${{ inputs.environment }}
+          WEBSITE_REF: ${{ inputs.website_ref }}
+        run: |
+          case "$TARGET/$WEBSITE_REF" in
+            production/prod|staging/stage) ;;
+            *) echo 'Invalid environment/branch mapping'; exit 1 ;;
+          esac
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.website_ref }}
+          path: website
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: '0.9.2'
+          python-version: '3.13.7'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - run: uv sync --frozen --no-dev
+      - run: npm ci --ignore-scripts
+      - run: uv run tb-stats restore --data .state --manifest .snapshot.json
+      - name: Build static files
+        run: |
+          revision=$(git -C website rev-parse HEAD)
+          uv run tb-stats build --website website/docs --data .state --output dist --manifest .snapshot.json --revision "$revision"
+      - name: Deploy files
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET: ${{ inputs.environment }}
+        run: npx --no-install wrangler deploy --config "deploy/wrangler.$TARGET.jsonc"
+      - name: Purge the deployed hostname and verify content
+        env:
+          CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+          TARGET: ${{ inputs.environment }}
+        run: |
+          revision=$(git -C website rev-parse HEAD)
+          uv run tb-stats finish-deploy --environment "$TARGET" --output dist --manifest .snapshot.json --revision "$revision"

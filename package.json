@@ -1,0 +1,8 @@
+{
+  "name": "thunderbird-stats-deploy",
+  "private": true,
+  "description": "CLI dependency for deploying plain static files only",
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

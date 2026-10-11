@@ -1,0 +1,10 @@
+[Unit]
+Description=Poll for completed Thunderbird statistics
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+Unit=stats-atn.service
+
+[Install]
+WantedBy=timers.target
