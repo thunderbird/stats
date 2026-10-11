@@ -2,6 +2,7 @@ import boto3
 import csv
 import datetime
 import json
+import shutil
 import sys
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
@@ -201,6 +202,11 @@ def build_beta_aggregate(jsondata, vrelease, output_dir="docs"):
 
 
 def build_derived(jsondata, output_dir="docs"):
+    # Keep the previous release's beta history when the current chart advances.
+    archive = Path(output_dir) / "140beta_nightly_adi.json"
+    previous = Path(output_dir) / "beta_nightly_adi.json"
+    if not archive.exists() and previous.exists():
+        shutil.copyfile(previous, archive)
     for vmin, vmax, end in [(115,153,(2027,12,28)), (115,140,(2026,12,28)),
                              (102,128,(2025,12,28)), (91,115,(2024,12,28)),
                              (78,102,(2023,12,28)), (68,91,(2023,1,2))]:

@@ -50,6 +50,7 @@ def test_snapshot_commit_failure_keeps_current_and_can_restore(tmp_path):
     assert store.current()[0] == first
     store.restore(first, tmp_path/'restored')
     assert json.loads((tmp_path/'restored/data.json').read_bytes()) == {'x': 1}
+    assert digest((tmp_path/'restored/data.json').read_bytes()) == first['files']['data.json']['sha256']
 
 
 def test_stale_writer_cannot_advance_current(tmp_path):
@@ -143,6 +144,16 @@ def test_build_uses_snapshot_and_branch_financials(tmp_path):
     assert json.loads((out/'financials.json').read_text()) == {'reviewed': True}
     assert 'max-age=3600' in (out/'_headers').read_text()
     assert not (out/'.git').exists()
+
+
+def test_build_rejects_missing_chart_data(tmp_path):
+    website, data = tmp_path/'website', tmp_path/'data'
+    website.mkdir()
+    data.mkdir()
+    (website/'index.html').write_text('site')
+    (website/'chart.js').write_text("$.getJSON('missing.json', () => {});")
+    with pytest.raises(ValueError, match='Missing JSON'):
+        build(website, data, tmp_path/'dist', {'run_id': 'r', 'files': {}}, 'revision')
 
 
 def test_atn_checks_all_five_files_before_import():
