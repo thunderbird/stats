@@ -83,3 +83,24 @@ class Store:
         self.put(f"{self.prefix}/published/{environment}.json", json_bytes({
             "run_id": manifest["run_id"], "website_revision": revision,
             "published_at": dt.datetime.now(dt.UTC).isoformat()}))
+
+    def ready(self, day, value):
+        """A delayed retry may not roll an ATN handoff back to an older revision."""
+        key = f"prod/atn/ready/{day}.json"
+        for _ in range(5):
+            try:
+                body, etag = self.get(key)
+                if json.loads(body)['revision'] >= value['revision']:
+                    return
+                condition = {'IfMatch': etag}
+            except ClientError as error:
+                if error.response['Error']['Code'] not in {'NoSuchKey', '404'}:
+                    raise
+                condition = {'IfNoneMatch': '*'}
+            try:
+                self.put(key, json_bytes(value), **condition)
+                return
+            except ClientError as error:
+                if error.response['Error']['Code'] not in {'PreconditionFailed', '412', 'ConditionalRequestConflict'}:
+                    raise
+        raise RuntimeError(f'Concurrent ATN handoff updates for {day}')

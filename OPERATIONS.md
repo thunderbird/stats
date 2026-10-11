@@ -12,8 +12,8 @@ is a compatibility entry point; the complete pipeline uses `tb-stats collect`.
 Do not run the old `amo-ops`/`athenatools` jobs alongside the new pipeline.
 
 GitHub runs `process.yml` at **04:00 UTC**, processing the previous UTC day.
-Weekly metrics retain their Sunday date anchors. `sumo.yml` runs independently
-at 04:30 so an upstream SUMO failure does not prevent publication of other data.
+Weekly metrics retain their Sunday date anchors. `sumo.yml` also runs at 04:00,
+independently, so an upstream SUMO failure does not prevent other publication.
 Both use one concurrency group. GitHub scheduling is best effort; missing days
 are recovered from the saved data, with a 32-day bound per invocation.
 

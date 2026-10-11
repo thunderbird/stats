@@ -72,6 +72,14 @@ def test_corrupt_snapshot_is_not_used(tmp_path):
         store.restore(manifest, tmp_path/'restore')
 
 
+def test_old_handoff_retry_does_not_replace_new_revision():
+    store = Store(MemoryS3(), Config('bucket'))
+    store.ready('2026-10-10', {'revision': '20261011-new'})
+    store.ready('2026-10-10', {'revision': '20261010-old'})
+    body, _ = store.get('prod/atn/ready/2026-10-10.json')
+    assert json.loads(body)['revision'] == '20261011-new'
+
+
 @pytest.mark.parametrize('state', ['FAILED', 'CANCELLED'])
 def test_athena_terminal_failures_propagate(state):
     client = Mock()
