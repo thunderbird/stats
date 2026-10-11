@@ -1,6 +1,7 @@
 """Build and verify a plain static bundle, then purge one fixed hostname."""
 import os
 from pathlib import Path
+import re
 import shutil
 import time
 
@@ -45,6 +46,10 @@ def build(website, data, output, manifest, revision):
         raise ValueError("Static asset limit exceeded")
     if not (output/"index.html").is_file():
         raise ValueError("Missing index.html")
+    for script in output.rglob('*.js'):
+        for name in re.findall(r'''getJSON\(['"]([^'"]+\.json)['"]''', script.read_text()):
+            if '://' not in name and not (output/name).is_file():
+                raise ValueError(f'Missing JSON referenced by {script.name}: {name}')
     return {str(p.relative_to(output)): digest(p.read_bytes()) for p in files if p.name != '_headers'}
 
 

@@ -6,7 +6,7 @@ import re
 
 from botocore.exceptions import ClientError
 
-from .common import atomic_json, digest, json_bytes
+from .common import atomic_write, digest, json_bytes
 
 
 def safe_name(name):
@@ -51,7 +51,8 @@ class Store:
             body, _ = self.get(artifact["key"])
             if len(body) != artifact["size"] or digest(body) != artifact["sha256"]:
                 raise ValueError(f"Snapshot checksum mismatch: {name}")
-            atomic_json(directory / name, json.loads(body))
+            json.loads(body)
+            atomic_write(directory / name, body)
 
     def snapshot(self, directory, run_id, checkpoints, revision, previous_etag, *, seed=False):
         safe_name(run_id)

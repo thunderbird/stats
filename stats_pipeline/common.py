@@ -29,20 +29,24 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def atomic_json(path, value):
+def atomic_write(path, body):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     name = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as f:
             name = f.name
-            f.write(json_bytes(value))
+            f.write(body)
             f.flush()
             os.fsync(f.fileno())
         os.replace(name, path)
     finally:
         if name and os.path.exists(name):
             os.unlink(name)
+
+
+def atomic_json(path, value):
+    atomic_write(path, json_bytes(value))
 
 
 def http_session():
