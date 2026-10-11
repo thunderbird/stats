@@ -11,6 +11,13 @@ retains the existing telemetry SQL and metric calculations. `generate_json.py`
 is a compatibility entry point; the complete pipeline uses `tb-stats collect`.
 Do not run the old `amo-ops`/`athenatools` jobs alongside the new pipeline.
 
+Legacy feature, add-on, platform and locale queries retain the production
+version cohort through 140 in `legacy_telemetry_versions`. The 153 release is
+still included in ADI/uptake and Glean MAU. Adding 153 to the legacy feature
+denominator changes percentages without adding matching feature observations
+in the current data; that requires a separate metric
+migration, not an automatic release-list bump.
+
 GitHub runs `process.yml` at **04:00 UTC**, processing the previous UTC day.
 Weekly metrics retain their Sunday date anchors. `sumo.yml` also runs at 04:00,
 independently, so an upstream SUMO failure does not prevent other publication.
@@ -152,21 +159,27 @@ documents for removed add-ons need explicit reconciliation. This is safer than
 silently leaving stale search documents. The currently active import supports
 late-log additions automatically.
 
-The timer's `--first-day` is the first date the new producer owns. Earlier dates
+The timer's `--first-day` is **2026-10-11**, the first date the new producer owns.
+October 10 was imported once during end-to-end validation. Earlier dates
 were already imported by control and are deliberately skipped. Set it to the
 agreed cutover date, never to an arbitrary historical starting point.
+
+For an intentional ATN correction before that date, review the pending manifest
+set with a manual `--dry-run` and an explicitly chosen earlier `--first-day`.
+Use the same acknowledgement directory; keep the timer's normal boundary.
 
 To update the consumer, build its pinned image on the operator host and copy it
 over the existing SSH connection. This does not give GitHub access to ATN:
 
 ```bash
-docker build -f deploy/atn.Dockerfile -t thunderbird-stats-atn:current .
+git archive HEAD | docker build -f deploy/atn.Dockerfile -t thunderbird-stats-atn:current -
 docker save thunderbird-stats-atn:current | gzip > stats-atn-image.tar.gz
 scp stats-atn-image.tar.gz centos@172.31.45.221:/home/centos/
 ssh centos@172.31.45.221 'sudo docker load -i /home/centos/stats-atn-image.tar.gz'
 ```
 
-Wait for an active import to finish before replacing the image or service. The
+Build from committed source so local data, scratch files and credentials cannot
+enter the image. Wait for an active import to finish before restarting the service. The
 unit disables SELinux labeling for the consumer to access this host's existing
 Docker socket; it does not alter the running `addons-server` container.
 
@@ -204,7 +217,8 @@ challenges. Without it, automated JSON requests to the newly proxied staging
 hostname receive an HTML challenge. No exception was added for other hosts.
 
 `STATS_SCHEDULE_ENABLED` and `STATS_DEPLOY_ENABLED` are explicit cutover switches.
-Keep them false while validating. GitHub's normal failed-workflow notifications
+Both are enabled after the October 11 cutover. Disable scheduling before
+restoring legacy producers. GitHub's normal failed-workflow notifications
 report failures. A public repository schedule may be disabled after inactivity;
 include that check in operational monitoring.
 
@@ -221,3 +235,8 @@ To roll back processing, disable the Actions schedule and ATN timer first,
 wait for active work to stop, restore the legacy schedules, then restore DNS
 only if reverting hosting too. Never allow two producers/importers to run.
 Leave old web hosts/data available until daily and weekly cycles are verified.
+
+For a later rollback, first restore the latest validated S3 JSON snapshot to
+the legacy data directories; the initial backup ends on the cutover date.
+Detach the selected Worker's custom domain before restoring that hostname's
+original CNAME. Keep the compatible 64-bit ATN count column; do not narrow it.

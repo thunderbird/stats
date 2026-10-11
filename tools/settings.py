@@ -9,6 +9,10 @@ first_version = 78
 first_glean_version = 128
 # List of recently released versions.
 release_version = [78, 91, 102, 115, 128, 140, 153]
+# Preserve the production cohort for legacy feature/add-on telemetry. A release
+# bump must not silently enlarge feature denominators with versions that no
+# longer submit those legacy metrics. ADI and Glean MAU include newer versions.
+legacy_telemetry_versions = [78, 91, 102, 115, 128, 140]
 
 # Add-ons to ignore when counting users.
 ignore_addon_guids = [

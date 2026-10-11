@@ -122,7 +122,7 @@ class AthenaQuery(object):
             "fieldname": fieldname,
             "date1": self._dateformat(num_days),
             "date2": self._dateformat(),
-            "version": self._versioncond(settings.release_version)
+            "version": self._versioncond(settings.legacy_telemetry_versions)
         }
         self.cursor.execute(queries.keyedscalar['users'].format(**params))
         self.data = self.cursor.fetchall()
