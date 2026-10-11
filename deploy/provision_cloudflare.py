@@ -21,9 +21,8 @@ class Cloudflare:
     def request(self, method, path, **kwargs):
         response = self.session.request(method, f'https://api.cloudflare.com/client/v4/{path}',
                                         timeout=60, **kwargs)
-        response.raise_for_status()
         value = response.json()
-        if not value.get('success'):
+        if not response.ok or not value.get('success'):
             raise RuntimeError(f'Cloudflare {path}: {value.get("errors")}')
         return value['result']
 
@@ -62,12 +61,30 @@ def connect(cf, cache, environment):
         backup.write_text(json.dumps(existing, indent=2))
     if any(record['name'] != host for record in existing):
         raise ValueError('Unexpected DNS record returned')
-    # Only this new Worker and this one hostname are in scope. Routine deployments
-    # deliberately omit domains and have no DNS/route permission.
-    cf.request('PUT', f'accounts/{ACCOUNT}/workers/scripts/{name}/domains/records', json={
-        'override_scope': True, 'override_existing_origin': False,
-        'override_existing_dns_record': True,
-        'origins': [{'hostname': host, 'zone_id': ZONE, 'enabled': True, 'previews_enabled': False}]})
+    domains = cf.request('GET', f'accounts/{ACCOUNT}/workers/domains')
+    attached = [d for d in domains if d['hostname'] == host]
+    if attached:
+        if len(attached) != 1 or attached[0]['service'] != name:
+            raise ValueError('Hostname is already attached to a different Worker')
+        print(f'{host} is already connected to {name}')
+        return
+    # Cloudflare rejects custom domains while an ordinary CNAME/A/AAAA exists.
+    # Touch only this exact hostname; restore its records if attachment fails.
+    if any(r['type'] not in {'CNAME', 'A', 'AAAA'} for r in existing):
+        raise ValueError('Review unexpected DNS record types before cutover')
+    removed = []
+    try:
+        for record in existing:
+            cf.request('DELETE', f'zones/{ZONE}/dns_records/{record["id"]}')
+            removed.append(record)
+        cf.request('PUT', f'accounts/{ACCOUNT}/workers/domains', json={
+            'hostname': host, 'service': name, 'zone_id': ZONE,
+            'enabled': True, 'environment': 'production'})
+    except Exception:
+        for record in removed:
+            fields = {k: record[k] for k in ('type', 'name', 'content', 'ttl', 'proxied', 'comment', 'tags') if k in record}
+            cf.request('POST', f'zones/{ZONE}/dns_records', json=fields)
+        raise
     print(f'Connected {host} to {name}; previous DNS saved in {backup}')
 
 

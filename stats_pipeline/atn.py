@@ -41,7 +41,7 @@ def verify_artifacts(s3, bucket, manifest):
 def container_script(day, folder, validate_only=False, average_only=False):
     # Existing management command and Celery tasks do the actual work. A transaction
     # prevents the legacy delete-then-insert import from leaving a partial date.
-    return '''import json
+    source = '''import json
 from django.core.management import call_command
 from django.db import transaction, connection
 from django.conf import settings
@@ -110,6 +110,9 @@ def import_date():
     cursor.close()
 import_date()
 '''.replace('DAY', repr(day)).replace('FOLDER', repr(folder)).replace('VALIDATE', repr(validate_only)).replace('AVERAGE', repr(average_only))
+    # Django 1.11 executes shell commands inside a function. Explicit globals
+    # make imported names visible to functions defined by that Python 2 exec.
+    return f"scope = {{}}; exec(compile({source!r}, '<stats_pipeline>', 'exec'), scope, scope)"
 
 
 def exec_checked(container, command):
