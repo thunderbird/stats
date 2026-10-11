@@ -31,10 +31,11 @@ The executable implementation and recovery commands are documented in
 - Production and staging deployment checks verified complete static assets,
   data hashes, independent branch mappings and the **one-hour** cache policy.
   Publishing tokens were denied access to an unrelated Worker.
-- **39 tests and 8 subtests** pass, alongside Ruff and workflow validation.
-- SUMO remains an upstream issue: its API returns an HTML browser challenge
-  from both this host and GitHub. The separate job reports failure and retains
-  the last valid dataset, dated **2026-04-02**.
+- **54 tests and 8 subtests** pass, alongside Ruff and workflow validation.
+- SUMO imports the existing `thunderbird/aaq-scraper` CSV exports instead of
+  accessing the challenged API. It preserves published history and the Pacific
+  day boundary, validates source completeness, and records the upstream Git
+  revision and file hashes with each snapshot. See `OPERATIONS.md`.
 - The first automatic 04:00 UTC cycle is **2026-10-12**. Manual end-to-end
   validation is complete; observe that scheduled cycle and the next weekly
   cycle before retiring the rollback resources.
