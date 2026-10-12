@@ -450,10 +450,10 @@ def test_discarded_row_counts_reach_durable_checkpoint_and_report(collection, mo
     collect = pipeline.collect_source
     warning = {"component": "atn/2026-10-11/version", "discarded_rows": 1}
 
-    def warned(*args, **kwargs):
-        if args[5] == "atn":
-            args[8].warnings.append(warning)
-        return collect(*args, **kwargs)
+    def warned(s3, client, config, day, kind, source, run_id, failures, **kwargs):
+        if kind == "atn":
+            failures.warnings.append(warning)
+        return collect(s3, client, config, day, kind, source, run_id, failures, **kwargs)
 
     monkeypatch.setattr(pipeline, "collect_source", warned)
     report = directory / "report-output.json"
