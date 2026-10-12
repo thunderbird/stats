@@ -1,0 +1,19 @@
+name: Check collection policy
+on:
+  workflow_call:
+    outputs:
+      allowed:
+        description: Whether this event may collect and publish statistics
+        value: ${{ jobs.policy.outputs.allowed }}
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - id: check
+        env:
+          ALLOWED: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true') }}
+        run: printf 'allowed=%s\n' "$ALLOWED" >> "$GITHUB_OUTPUT"

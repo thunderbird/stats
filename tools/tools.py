@@ -11,6 +11,9 @@ import pyathena
 import re
 import urllib
 
+from stats_pipeline.common import http_session as http_session
+from stats_pipeline.common import record_failure as record_failure
+
 def collapse(data, stringcmp):
     result = collections.OrderedDict({stringcmp: 0})
     for k in data.keys():

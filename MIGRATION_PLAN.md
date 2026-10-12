@@ -31,10 +31,11 @@ The executable implementation and recovery commands are documented in
 - Production and staging deployment checks verified complete static assets,
   data hashes, independent branch mappings and the **one-hour** cache policy.
   Publishing tokens were denied access to an unrelated Worker.
-- **39 tests and 8 subtests** pass, alongside Ruff and workflow validation.
-- SUMO remains an upstream issue: its API returns an HTML browser challenge
-  from both this host and GitHub. The separate job reports failure and retains
-  the last valid dataset, dated **2026-04-02**.
+- **54 tests and 8 subtests** pass, alongside Ruff and workflow validation.
+- SUMO imports the existing `thunderbird/aaq-scraper` CSV exports instead of
+  accessing the challenged API. It preserves published history and the Pacific
+  day boundary, validates source completeness, and records the upstream Git
+  revision and file hashes with each snapshot. See `OPERATIONS.md`.
 - The first automatic 04:00 UTC cycle is **2026-10-12**. Manual end-to-end
   validation is complete; observe that scheduled cycle and the next weekly
   cycle before retiring the rollback resources.
@@ -166,13 +167,14 @@ code and installation configuration live in this repository:
    a lock before importing. Use the existing instance role for S3 access.
 3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=file`
    and `index_stats --date=YYYY-MM-DD` management commands locally. File mode
-   imports the exact immutable bytes verified by the consumer.
-4. Record completion durably after successful work. Verify actual command
-   idempotency and failure behavior before enabling retries or corrected-date
-   imports; do not assume reruns are harmless.
-5. Check dependencies and move `update_addon_average_daily_users` and
-   `update_global_totals` into the correctly ordered post-import sequence.
-   Their existing 00:20 and 00:40 UTC schedules precede the new processing job.
+   imports valid rows from the verified immutable revision, skipping malformed
+   records consistently with the producer.
+4. Checkpoint database import, indexing and per-date totals separately. Retry
+   only unfinished phases and continue other dates after an individual failure.
+5. Run `update_addon_average_daily_users` after its required database imports,
+   with a durable retry flag. Keep daily catalog totals on an independent
+   00:40 UTC local timer; those point-in-time measurements cannot wait for log
+   imports. Per-date update-ping totals remain dependent on import completion.
 6. Preserve unrelated ATN cron jobs. Choose a supported consumer runtime that
    works with the existing CentOS 7 host/container arrangement.
 
