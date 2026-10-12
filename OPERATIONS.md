@@ -204,6 +204,10 @@ stay with the consumer. Catalog counts are
 point-in-time measurements: after a missed day they cannot be reconstructed
 accurately from today's catalog. `Persistent=true` catches a missed activation
 on restart, but it cannot recreate multiple missed historical observations.
+The units support the host's systemd 219. The catalog service uses a 30-minute
+command timeout and the host's existing UTC timezone. Both units remove only
+their own helper container on exit, so a timeout cannot leave its Docker name
+occupied and prevent the next poll. The running `addons-server` is unaffected.
 
 Repeating an interrupted date replaces its rows rather than adding counts.
 A correction that would remove an existing add-on aborts and rolls back: search

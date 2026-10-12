@@ -2,7 +2,8 @@
 Description=Record ATN catalog totals daily at 00:40 UTC
 
 [Timer]
-OnCalendar=*-*-* 00:40:00 UTC
+# The ATN host uses UTC; systemd 219 cannot parse an explicit timezone suffix.
+OnCalendar=*-*-* 00:40:00
 Persistent=true
 Unit=stats-atn-catalog.service
 
