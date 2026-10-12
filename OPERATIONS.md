@@ -199,7 +199,8 @@ Catalog totals have their own local timer at **00:40 UTC**, preserving the old
 schedule. This records the seven yesterday-only counts even when log imports,
 search indexing or telemetry fail. The service uses a separate database lock
 and writes/verifies all 17 catalog totals, attempting later totals after one
-fails. Per-date update-ping totals stay with the consumer. Catalog counts are
+fails, and retries a failed run after five minutes. Per-date update-ping totals
+stay with the consumer. Catalog counts are
 point-in-time measurements: after a missed day they cannot be reconstructed
 accurately from today's catalog. `Persistent=true` catches a missed activation
 on restart, but it cannot recreate multiple missed historical observations.
@@ -307,7 +308,10 @@ gh workflow run sumo.yml --ref master
 The workflow validates the complete dataset, saves an immutable S3 snapshot,
 publishes the static site, and purges only `stats.thunderbird.net`. Staging uses
 the same validated data on its next deployment. Source failures preserve the
-last published counts and fail the independent job explicitly.
+affected counts and fail the independent job explicitly. A failed UTC CSV
+holds back only the Pacific days that depend on it; complete independent days
+still advance. A delayed refresh watermark similarly permits earlier complete
+days to advance. Neither case replaces a missing observation with zero.
 
 ## Rollback
 

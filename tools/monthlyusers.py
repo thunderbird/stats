@@ -31,7 +31,7 @@ GLEAN_QUERY_ID = 107298
 # Cache for Glean API results
 _glean_cache = None
 
-def query_glean_data():
+def query_glean_data(on_error=None):
     """Query Glean API once and return all MAU data."""
     global _glean_cache
 
@@ -48,20 +48,34 @@ def query_glean_data():
     response = tools.http_session().get(url, headers=headers, timeout=30)
     response.raise_for_status()
     rows = response.json()['query_result']['data']['rows']
+    if not isinstance(rows, list):
+        raise ValueError("Glean API returned an invalid row collection")
     results = {}
-    for row in rows:
-        day = row['received_day']
-        datetime.datetime.strptime(day, '%Y-%m-%d')
-        mau = row['mau']
-        if type(mau) is not int or mau <= 0 or day in results:
-            raise ValueError(f"Invalid or duplicate Glean MAU for {day}")
-        results[day] = mau
+    rejected = set()
+    errors = False
+    for index, row in enumerate(rows):
+        key = f'row/{index}'
+        try:
+            day = row['received_day']
+            datetime.datetime.strptime(day, '%Y-%m-%d')
+            key = day
+            mau = row['mau']
+            if type(mau) is not int or mau <= 0 or day in results or day in rejected:
+                # Neither copy of a conflicting duplicate is authoritative.
+                rejected.add(day)
+                results.pop(day, None)
+                raise ValueError(f"Invalid or duplicate Glean MAU for {day}")
+            results[day] = mau
+        except Exception as error:
+            errors = True
+            tools.record_failure(on_error, key, error)
     if not results:
         raise ValueError("Glean API returned no MAU data")
-    # Cache only complete, validated responses. API failures must stop publishing.
-    _glean_cache = results
-    print(f"Retrieved {len(_glean_cache)} days of Glean data")
-    return _glean_cache
+    # Partial responses are usable for their valid dates, but are not cached.
+    if not errors:
+        _glean_cache = results
+    print(f"Retrieved {len(results)} days of Glean data")
+    return results
 
 
 def get_glean_mau(date_string, glean_data):
@@ -166,7 +180,8 @@ def collect(dataloc, adi_data, through=None, *, recalculate=False, add_missing=T
                 if glean_error is not None:
                     raise glean_error
                 try:
-                    glean_data = query_glean_data()
+                    glean_data = (query_glean_data() if on_error is None else
+                                  query_glean_data(on_error=on_error))
                 except Exception as error:
                     glean_error = error
                     raise

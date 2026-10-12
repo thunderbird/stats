@@ -278,7 +278,12 @@ def _collect_component(
     elif component == "sumo":
         details["source"] = {}
         result = failures.attempt(
-            "sumo", sumo.collect, baseline["sumo.json"], through, source_info=details["source"]
+            "sumo",
+            sumo.collect,
+            baseline["sumo.json"],
+            through,
+            source_info=details["source"],
+            on_error=lambda day, error: failures.record(f"sumo/{day}", error),
         )
         if result is not None:
             atomic_json(
@@ -333,9 +338,17 @@ def _collect_component(
                 atomic_json(directory / filename, result)
         records = read_data(directory)[filename]
         if component == "scalars":
-            for scalar, values in records.items():
+            latest_sunday = through - dt.timedelta(days=(through.weekday() + 1) % 7)
+            for definition in settings.keyedscalars:
+                if not scalars.is_scalar_started(definition.get("start"), latest_sunday):
+                    continue
+                scalar = definition["key"]
                 failures.attempt(
-                    f"scalars/{scalar}/freshness", check_freshness, scalar, values, through
+                    f"scalars/{scalar}/freshness",
+                    check_freshness,
+                    scalar,
+                    records.get(scalar, {}),
+                    through,
                 )
         else:
             failures.attempt(f"{component}/freshness", check_freshness, filename, records, through)

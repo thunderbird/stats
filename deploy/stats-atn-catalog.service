@@ -6,6 +6,8 @@ Requires=docker.service
 [Service]
 Type=oneshot
 TimeoutStartSec=1800
+Restart=on-failure
+RestartSec=5min
 ExecStart=/usr/bin/docker run --rm --network host --security-opt label=disable --name stats-atn-catalog -v /var/run/docker.sock:/var/run/docker.sock thunderbird-stats-atn:current --catalog-only
 StandardOutput=journal
 StandardError=journal

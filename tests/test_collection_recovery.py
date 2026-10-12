@@ -97,7 +97,7 @@ def test_atn_dimension_failure_does_not_block_adi_or_mau(collection, monkeypatch
     adi = json.loads((directory / "thunderbird_adi.json").read_bytes())
     assert adi["2026-10-11"]["count"] == 100
     assert "prod/atn/ready/2026-10-11.json" not in store.s3.data
-    monkeypatch.setattr(monthlyusers, "query_glean_data", lambda: {"2026-10-11": 120})
+    monkeypatch.setattr(monthlyusers, "query_glean_data", lambda **kw: {"2026-10-11": 120})
     pipeline.run(config, directory, "code", component="mau")
     assert json.loads((directory / "thunderbird_ami.json").read_bytes())["2026-10-11"]["ami"] == 120
 
@@ -106,7 +106,7 @@ def test_glean_failure_does_not_block_other_components_or_daily_handoff(collecti
     config, store, directory, baseline, original = collection
     sources(monkeypatch)
 
-    def fail_glean():
+    def fail_glean(**kw):
         raise RuntimeError("Glean offline")
 
     monkeypatch.setattr(monthlyusers, "query_glean_data", fail_glean)
@@ -274,3 +274,19 @@ def test_mau_failure_preserves_successful_weeks_and_reuses_one_glean_request(mon
     assert set(result) == {"2026-10-11"} and added == 1
     assert failures.errors[0]["component"] == "2026-10-04"
     query.assert_called_once()
+
+
+def test_retired_and_not_yet_started_scalars_do_not_fail_freshness(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    baseline["telemetry.json"]["retired"] = {"2020-01-05": {"count": 5, "versions": {}}}
+    atomic_json(directory / "telemetry.json", baseline["telemetry.json"])
+    store.snapshot(directory, "with-retired", {}, "code", store.current()[1])
+    monkeypatch.setattr(
+        pipeline.settings, "keyedscalars", [{"key": "a"}, {"key": "future", "start": "2026-10-12"}]
+    )
+    monkeypatch.setitem(
+        pipeline.WEEKLY, "scalars", ("telemetry.json", lambda data, through, **kw: data)
+    )
+    saved = pipeline.run(config, directory, "code", component="scalars")
+    assert saved["checkpoints"]["scalars"]["errors"] == []
+    assert "retired" in json.loads((directory / "telemetry.json").read_bytes())

@@ -221,7 +221,7 @@ def test_sumo_snapshot_changes_only_sumo_and_keeps_source_provenance(tmp_path, m
     monkeypatch.setattr(pipeline, 'utc_today', lambda: dt.date(2026, 10, 11))
     monkeypatch.setattr(pipeline.sumo, 'latest_complete_day', lambda: dt.date(2026, 10, 9))
 
-    def collect(counts, through, *, source_info):
+    def collect(counts, through, *, source_info, on_error):
         assert through == dt.date(2026, 10, 9)
         source_info.update(revision='a' * 40, timezone='America/Los_Angeles')
         return counts | {'2026-10-09': 50}

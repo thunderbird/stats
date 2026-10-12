@@ -11,6 +11,13 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
+def record_failure(on_error, key, error):
+    """Standalone collectors fail normally; the pipeline can isolate a point."""
+    if on_error is None:
+        raise error
+    on_error(key, error)
+
+
 class Failures:
     """Keep independent work running, while retaining an explicit failure result."""
     def __init__(self):
