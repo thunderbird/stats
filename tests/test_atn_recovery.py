@@ -3,6 +3,7 @@ import datetime as dt
 import json
 import sys
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 import pytest
 
@@ -282,3 +283,30 @@ def test_catalog_retries_are_bounded_and_keep_original_day(monkeypatch, always_f
     assert all(call.args == (container, "catalog", "2026-10-11") for call in operation.call_args_list)
     assert all(call.args == (300,) for call in sleep.call_args_list)
     today.assert_called_once()
+
+
+@pytest.mark.parametrize("today", [dt.date(2026, 10, 11), dt.date(2026, 10, 12)])
+def test_catalog_cannot_silently_lose_point_in_time_jobs_across_midnight(today):
+    wrapper = ast.parse(atn.container_script(DAY, operation="catalog"))
+    source = ast.literal_eval(wrapper.body[1].value.args[0].args[0])
+    function = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "run")
+    function.decorator_list = []
+    connection = Mock()
+    connection.cursor.return_value.fetchone.return_value = (1,)
+    write = Mock()
+    tasks = Mock()
+    namespace = {
+        "connection": connection,
+        "datetime": SimpleNamespace(date=Mock(today=Mock(return_value=today)), datetime=dt.datetime, timedelta=dt.timedelta),
+        "stat_tasks": tasks,
+        "write_totals": write,
+    }
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<catalog>", "exec"), namespace)
+    if today == dt.date(2026, 10, 11):
+        namespace["run"]()
+        write.assert_called_once_with(dt.date(2026, 10, 10), tasks._get_daily_jobs.return_value, preserve_existing=True)
+    else:
+        with pytest.raises(RuntimeError, match="no longer available"):
+            namespace["run"]()
+        tasks._get_daily_jobs.assert_not_called()
+        write.assert_not_called()

@@ -214,7 +214,9 @@ fails. Successful point-in-time readings are retained on retries; only missing
 totals are calculated again. Each activation makes up to six attempts, five
 minutes apart, within a total thirty-minute command timeout. All attempts use
 the original target date, including retries across midnight. A failed activation
-does not impose a systemd start limit on the following day's timer. Per-date update-ping totals
+does not impose a systemd start limit on the following day's timer. If midnight
+passes before the target date's point-in-time counts can be recorded, the run
+fails explicitly rather than silently omitting those counts. Per-date update-ping totals
 stay with the consumer. Catalog counts are
 point-in-time measurements: after a missed day they cannot be reconstructed
 accurately from today's catalog. `Persistent=true` catches a missed activation

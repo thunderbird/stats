@@ -85,6 +85,8 @@ def run():
     if @@OPERATION@@ == 'catalog':
         date = (datetime.datetime.strptime(@@DAY@@, '%Y-%m-%d').date()
                 if @@DAY@@ else datetime.date.today() - datetime.timedelta(days=1))
+        if date != datetime.date.today() - datetime.timedelta(days=1):
+            raise RuntimeError('Catalog point-in-time counts are no longer available for ' + str(date))
         write_totals(date, stat_tasks._get_daily_jobs(date), preserve_existing=True)
         return
     if @@OPERATION@@ == 'average':
