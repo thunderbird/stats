@@ -211,9 +211,10 @@ schedule. This records the seven yesterday-only counts even when log imports,
 search indexing or telemetry fail. The service uses a separate database lock
 and writes/verifies all 17 catalog totals, attempting later totals after one
 fails. Successful point-in-time readings are retained on retries; only missing
-totals are calculated again. A failed run retries after five minutes, up to six
-attempts within twelve hours. The next daily activation starts a fresh attempt
-window. Per-date update-ping totals
+totals are calculated again. Each activation makes up to six attempts, five
+minutes apart, within a total thirty-minute command timeout. All attempts use
+the original target date, including retries across midnight. A failed activation
+does not impose a systemd start limit on the following day's timer. Per-date update-ping totals
 stay with the consumer. Catalog counts are
 point-in-time measurements: after a missed day they cannot be reconstructed
 accurately from today's catalog. `Persistent=true` catches a missed activation

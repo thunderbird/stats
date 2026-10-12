@@ -5,8 +5,10 @@ import datetime as dt
 import fcntl
 import io
 import json
+import logging
 from pathlib import Path
 import tarfile
+import time
 import uuid
 
 import boto3
@@ -81,7 +83,8 @@ def run():
         raise RuntimeError('Another stats operation still owns ' + lock)
     cursor.close()
     if @@OPERATION@@ == 'catalog':
-        date = datetime.date.today() - datetime.timedelta(days=1)
+        date = (datetime.datetime.strptime(@@DAY@@, '%Y-%m-%d').date()
+                if @@DAY@@ else datetime.date.today() - datetime.timedelta(days=1))
         write_totals(date, stat_tasks._get_daily_jobs(date), preserve_existing=True)
         return
     if @@OPERATION@@ == 'average':
@@ -337,7 +340,16 @@ def main():
     )
     args = parser.parse_args()
     if args.catalog_only:
-        run_operation(get_container(args.container), "catalog")
+        day = str(utc_today() - dt.timedelta(days=1))
+        for attempt in range(6):
+            try:
+                run_operation(get_container(args.container), "catalog", day)
+                break
+            except Exception:
+                if attempt == 5:
+                    raise
+                logging.exception("Catalog attempt %s failed; retrying in five minutes", attempt + 1)
+                time.sleep(300)
     else:
         if not args.bucket or not args.first_day:
             parser.error("--bucket and --first-day are required for imports")

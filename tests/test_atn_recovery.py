@@ -1,6 +1,7 @@
 import ast
 import datetime as dt
 import json
+import sys
 from unittest.mock import Mock
 
 import pytest
@@ -258,3 +259,26 @@ def test_catalog_retry_preserves_successful_readings_and_retries_only_missing_to
     assert rows["failed", DAY] == 5
     namespace["write_totals"](DAY, {"existing": jobs["existing"]})
     assert rows["existing", DAY] == 4  # Import-dependent totals still refresh.
+
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_catalog_retries_are_bounded_and_keep_original_day(monkeypatch, always_fail):
+    monkeypatch.setattr(sys, "argv", ["tb-stats-atn", "--catalog-only"])
+    today = Mock(side_effect=[dt.date(2026, 10, 12), dt.date(2026, 10, 13)])
+    monkeypatch.setattr(atn, "utc_today", today)
+    container = object()
+    monkeypatch.setattr(atn, "get_container", lambda name: container)
+    sleep = Mock()
+    monkeypatch.setattr(atn.time, "sleep", sleep)
+    operation = Mock(side_effect=RuntimeError("unavailable") if always_fail else [RuntimeError("transient"), None])
+    monkeypatch.setattr(atn, "run_operation", operation)
+    if always_fail:
+        with pytest.raises(RuntimeError, match="unavailable"):
+            atn.main()
+    else:
+        atn.main()
+    assert operation.call_count == (6 if always_fail else 2)
+    assert sleep.call_count == operation.call_count - 1
+    assert all(call.args == (container, "catalog", "2026-10-11") for call in operation.call_args_list)
+    assert all(call.args == (300,) for call in sleep.call_args_list)
+    today.assert_called_once()

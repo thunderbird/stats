@@ -4,13 +4,9 @@ After=docker.service
 Requires=docker.service
 
 [Service]
-Type=simple
-# systemd 219 supports Restart=on-failure only for non-oneshot services.
-Restart=on-failure
-RestartSec=5min
-# Bound retries within a day; tomorrow's timer starts a fresh attempt window.
-StartLimitInterval=12h
-StartLimitBurst=6
+Type=oneshot
+# Retries happen within this invocation, avoiding a start limit on tomorrow's timer.
+TimeoutStartSec=1860
 TimeoutStopSec=60
 ExecStart=/usr/bin/timeout -k 30 1800 /usr/bin/docker run --rm --network host --security-opt label=disable --name stats-atn-catalog -v /var/run/docker.sock:/var/run/docker.sock thunderbird-stats-atn:current --catalog-only
 ExecStopPost=-/usr/bin/docker rm -f stats-atn-catalog
