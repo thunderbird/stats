@@ -7,15 +7,18 @@ permissions:
   contents: read
   id-token: write
 jobs:
+  policy:
+    uses: ./.github/workflows/collection-policy.yml
   collect:
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: policy
+    if: needs.policy.outputs.allowed == 'true'
     uses: ./.github/workflows/collect-component.yml
     with:
       component: sumo
     secrets: inherit
   publish:
-    needs: collect
-    if: always() && !cancelled() && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: [policy, collect]
+    if: always() && !cancelled() && needs.policy.outputs.allowed == 'true'
     uses: ./.github/workflows/publish-static.yml
     with:
       environment: production

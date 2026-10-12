@@ -1,4 +1,5 @@
 """Isolated CloudFront log aggregation; no shared tables or bucket-wide cleanup."""
+
 import datetime as dt
 import logging
 import uuid
@@ -9,17 +10,27 @@ from .athena import Athena
 from .artifacts import GROUPS, clean_rows, tsv
 from .common import digest, json_bytes
 
-SOURCES = {"atn": ("versioncheck-logs", "E1PQMC7BGJOP5E"),
-           "aus": ("aus-thunderbird-logs", "EC3NSDIH119PP")}
+SOURCES = {
+    "atn": ("versioncheck-logs", "E1PQMC7BGJOP5E"),
+    "aus": ("aus-thunderbird-logs", "EC3NSDIH119PP"),
+}
 
 
 def source_manifest(s3, kind, day):
     bucket, distribution = SOURCES[kind]
     objects = []
     for page in s3.get_paginator("list_objects_v2").paginate(
-            Bucket=bucket, Prefix=f"{distribution}.{day}"):
-        objects.extend({"key": x["Key"], "etag": x["ETag"], "size": x["Size"],
-                        "modified": x["LastModified"].isoformat()} for x in page.get("Contents", []))
+        Bucket=bucket, Prefix=f"{distribution}.{day}"
+    ):
+        objects.extend(
+            {
+                "key": x["Key"],
+                "etag": x["ETag"],
+                "size": x["Size"],
+                "modified": x["LastModified"].isoformat(),
+            }
+            for x in page.get("Contents", [])
+        )
     objects.sort(key=lambda x: x["key"])
     if not objects or sum(o["size"] for o in objects) == 0:
         raise ValueError(f"Missing {kind} source logs for {day}")
@@ -32,25 +43,26 @@ def source_manifest(s3, kind, day):
     return {"bucket": bucket, "objects": objects, "sha256": digest(json_bytes(objects))}
 
 
-def validate_rows(rows, day, columns):
-    return clean_rows(rows, day, columns)
-
-
-def collect_source(s3, athena_client, config, day, kind, source, run_id, failures,
-                   groups=None):
+def collect_source(s3, athena_client, config, day, kind, source, run_id, failures, groups=None):
     """Aggregate one source; failed ATN dimensions do not discard other dimensions."""
     suffix = uuid.uuid4().hex
-    athena = Athena(athena_client, config.database, config.workgroup,
-                    f"s3://{config.bucket}/query-results/")
+    athena = Athena(
+        athena_client, config.database, config.workgroup, f"s3://{config.bucket}/query-results/"
+    )
     artifact_rows, artifacts = {}, {}
     prefix = f"scratch/{run_id}/{kind}/{day}/{suffix}/"
     table, view = f"stats_{kind}_{suffix}", f"stats_view_{suffix}"
     created_table = created_view = False
     try:
+
         def copy_source(item, destination=prefix, source_bucket=source["bucket"]):
-            s3.copy_object(Bucket=config.bucket, Key=destination + item["key"],
-                           CopySource={"Bucket": source_bucket, "Key": item["key"]},
-                           CopySourceIfMatch=item["etag"])
+            s3.copy_object(
+                Bucket=config.bucket,
+                Key=destination + item["key"],
+                CopySource={"Bucket": source_bucket, "Key": item["key"]},
+                CopySourceIfMatch=item["etag"],
+            )
+
         with ThreadPoolExecutor(max_workers=12) as pool:
             list(pool.map(copy_source, source["objects"]))
         sql = cloudfront_sql if kind == "atn" else aus_sql
@@ -59,9 +71,19 @@ def collect_source(s3, athena_client, config, day, kind, source, run_id, failure
         if kind == "atn":
             athena.execute(sql.create_view(table, view))
             created_view = True
+
             def query_group(qtype, group):
                 rows = athena.rows(sql.by_type(view, qtype, day))
-                return clean_rows(rows, day, 6 if group == "app" else 5)
+                cleaned = clean_rows(rows, day, 6 if group == "app" else 5)
+                if len(cleaned) < len(rows):
+                    failures.warnings.append(
+                        {
+                            "component": f"atn/{day}/{group}",
+                            "discarded_rows": len(rows) - len(cleaned),
+                        }
+                    )
+                return cleaned
+
             for qtype, group in GROUPS.items():
                 if groups is not None and group not in groups:
                     continue
@@ -69,36 +91,48 @@ def collect_source(s3, athena_client, config, day, kind, source, run_id, failure
                 if rows is not None:
                     artifact_rows[group] = rows
         else:
-            rows = clean_rows(athena.rows(sql.count_query(table)), day, 3, count_column=-1)
+            rows = athena.rows(sql.count_query(table))
+            # AUS aggregates go straight to JSON. A mismatched date or count
+            # invalidates this day's total; TSV field filtering does not apply.
+            if not rows or any(len(row) != 3 or row[0] != day or int(row[2]) < 0 for row in rows):
+                raise ValueError(f"Invalid AUS aggregate for {day}")
             # Match the legacy transform exactly, including repeated version rows.
-            return {"count": sum(int(row[2]) for row in rows),
-                    "versions": {row[1]: int(row[2]) for row in rows}}
+            return {
+                "count": sum(int(row[2]) for row in rows),
+                "versions": {row[1]: int(row[2]) for row in rows},
+            }
     finally:
         # Only resources this invocation created. Never delete the legacy scratch bucket.
         if created_view:
-            failures.attempt(f"cleanup/{day}/{kind}/view", athena.execute,
-                             cloudfront_sql.drop_view(view))
+            failures.attempt(
+                f"cleanup/{day}/{kind}/view", athena.execute, cloudfront_sql.drop_view(view)
+            )
         if created_table:
-            failures.attempt(f"cleanup/{day}/{kind}/table", athena.execute,
-                             cloudfront_sql.drop_table(table))
+            failures.attempt(
+                f"cleanup/{day}/{kind}/table", athena.execute, cloudfront_sql.drop_table(table)
+            )
         for offset in range(0, len(source["objects"]), 1000):
-            keys = [{"Key": prefix + x["key"]} for x in source["objects"][offset:offset+1000]]
+            keys = [{"Key": prefix + x["key"]} for x in source["objects"][offset : offset + 1000]]
+
             def delete(keys):
                 result = s3.delete_objects(Bucket=config.bucket, Delete={"Objects": keys})
                 if result.get("Errors"):
                     raise RuntimeError("Scratch cleanup failed; see S3 lifecycle fallback")
+
             failures.attempt(f"cleanup/{day}/{kind}/objects", delete, keys)
     if set(artifact_rows) == set(GROUPS.values()):
+
         def upload(group, rows):
             body = tsv(rows)
             key = f"{config.prefix}/atn/artifacts/{day}/{run_id}/update_counts_by_{group}.hive"
             s3.put_object(Bucket=config.bucket, Key=key, Body=body, IfNoneMatch="*")
             return {"key": key, "size": len(body), "sha256": digest(body)}
+
         for group, rows in artifact_rows.items():
             entry = failures.attempt(f"atn/{day}/upload/{group}", upload, group, rows)
             if entry is not None:
                 artifacts[group] = entry
-    logging.info("Aggregated %s (%s)", day, ', '.join(athena.executions))
+    logging.info("Aggregated %s (%s)", day, ", ".join(athena.executions))
     return {"rows": artifact_rows, "artifacts": artifacts}
 
 

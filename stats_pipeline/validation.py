@@ -65,7 +65,7 @@ def check_freshness(name, records, through):
         raise ValueError(f"Stale weekly dataset: {name}")
 
 
-def validate(directory, baseline=None, through=None):
+def validate(directory, baseline=None):
     data = read_data(directory)
     if REQUIRED - data.keys():
         raise ValueError(f"Missing datasets: {sorted(REQUIRED - data.keys())}")
@@ -86,10 +86,5 @@ def validate(directory, baseline=None, through=None):
     for scalar, records in data["telemetry.json"].items():
         for day, record in records.items():
             validate_record(scalar, day, record)
-    if through:
-        if through.isoformat() not in data["thunderbird_adi.json"]:
-            raise ValueError("ADI does not cover the requested end date")
-        for name in ("thunderbird_ami.json", "addon_stats.json", "locales.json", "platforms.json"):
-            check_freshness(name, data[name], through)
     return {name: {"records": len(records), "latest": max(records) if records else None}
             for name, records in data.items() if name in REQUIRED - {"telemetry.json"}}

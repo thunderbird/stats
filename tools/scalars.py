@@ -26,6 +26,7 @@ def is_scalar_started(scalardate, curdate):
 def collect(data, through, on_error=None):
     for daystring in tools.date_range(start_date, 7, through + datetime.timedelta(days=1)):
         curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
+        q = None
         for s in settings.keyedscalars:
             # Make sure we don't query scalars until their start dates.
             if is_scalar_started(s.get('start', None), curdate):
@@ -33,10 +34,12 @@ def collect(data, through, on_error=None):
                 if daystring not in dataloc:
                     try:
                         print(s['key'], daystring)
-                        q = tools.AthenaQuery(curdate)
+                        if q is None:
+                            q = tools.AthenaQuery(curdate)
                         dataloc[daystring] = q.keyedscalar_users(s['key']).format_data(
                             s.get('combine', None)).json()
                     except Exception as error:
+                        q = None
                         tools.record_failure(on_error, f"{s['key']}/{daystring}", error)
     return data
 

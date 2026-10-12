@@ -22,6 +22,7 @@ class Failures:
     """Keep independent work running, while retaining an explicit failure result."""
     def __init__(self):
         self.errors = []
+        self.warnings = []
 
     def attempt(self, label, function, *args, **kwargs):
         try:

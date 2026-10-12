@@ -86,6 +86,10 @@ finishes; a second publication picks up the weekly and MAU results. Ordinary
 GitHub failed-run notifications remain the notice mechanism; this is not
 independent freshness monitoring.
 
+Discarded ATN row counts appear in both the component checkpoint and the
+collection report. Invalid AUS aggregate dates/counts reject that ADI date
+instead of silently reducing its total; other dates continue processing.
+
 Only dependent work is held back: an ADI date requires both ATN version/app
 aggregates and AUS counts; a MAU factor requires its weekday ADI window; an ATN
 import requires all five verified files; indexing and per-date totals require
@@ -106,6 +110,9 @@ dispatch production collection from another branch. The `stats-processing`
 GitHub environment permits only `master` and owns the processing OIDC role.
 Break longer catch-ups into bounded ranges; the CLI accepts `--max-days` for
 operator runs when a larger deliberate backfill is appropriate.
+An explicit `--start` backfill re-queries all five ATN dimensions and creates a
+new handoff revision even when source fingerprints are unchanged. The local
+consumer still respects its configured first-day ownership boundary.
 
 For local operator commands, authenticate to AWS and set:
 

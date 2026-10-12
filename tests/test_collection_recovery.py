@@ -54,6 +54,8 @@ def sources(monkeypatch, fail_aus=None, incomplete_atn=None):
                 raise RuntimeError("AUS unavailable")
             return {"count": 80, "versions": {"128.0": 80}}
         artifacts = {g: {"key": f"{day}/{g}"} for g in GROUPS.values()}
+        if groups is not None:
+            artifacts = {}
         if day == incomplete_atn:
             failures.record(f"atn/{day}/locale", RuntimeError("locale query failed"))
             artifacts = {}
@@ -323,3 +325,138 @@ def test_bad_backlog_cannot_starve_current_day_or_other_retries(collection, monk
         assert "2026-10-11" in attempted
         all_attempted.update(attempted)
     assert set(backlog) <= all_attempted
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_legacy_checkpoint_keeps_artifact_fingerprint_separate_from_adi(
+    collection, monkeypatch, force
+):
+    config, store, directory, baseline, original = collection
+    day = "2026-10-11"
+    old_artifacts = {g: {"key": f"old/{g}"} for g in GROUPS.values()}
+    old_sources = {
+        day: {
+            "fingerprints": {"atn": "old-atn", "aus": f"aus-{day}"},
+            "artifacts": old_artifacts,
+            "revision": "old-revision",
+        }
+    }
+    store.snapshot(
+        directory, "legacy-checkpoint", {"sources": old_sources}, "code", store.current()[1]
+    )
+    sources(monkeypatch, incomplete_atn=day)
+    extra = {"start": dt.date(2026, 10, 11)} if force else {}
+    for _ in range(2):
+        with pytest.raises(pipeline.CollectionFailed, match="locale query failed"):
+            pipeline.run(config, directory, "code", component="daily", **extra)
+        checkpoint = store.current()[0]["checkpoints"]
+        assert checkpoint["sources"][day]["atn_fingerprint"] == "old-atn"
+        assert day in checkpoint["daily"]["pending"]
+
+
+def test_explicit_backfill_always_creates_fresh_atn_handoff(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    sources(monkeypatch)
+    first = pipeline.run(config, directory, "code", component="daily")
+    second = pipeline.run(config, directory, "code", component="daily", start=dt.date(2026, 10, 11))
+    day = "2026-10-11"
+    assert (
+        first["checkpoints"]["sources"][day]["revision"]
+        != second["checkpoints"]["sources"][day]["revision"]
+    )
+
+
+def test_missing_atn_source_does_not_run_useless_aus_query(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+
+    def source(s3, kind, day):
+        if kind == "atn":
+            raise RuntimeError("missing ATN logs")
+        return {"sha256": "aus"}
+
+    monkeypatch.setattr(pipeline, "source_manifest", source)
+    collector = Mock()
+    monkeypatch.setattr(pipeline, "collect_source", collector)
+    with pytest.raises(pipeline.CollectionFailed, match="missing ATN logs"):
+        pipeline.run(config, directory, "code", component="daily")
+    collector.assert_not_called()
+
+
+def test_scalar_denominator_is_queried_once_per_week(monkeypatch):
+    from pyathena.cursor import DictCursor
+
+    monkeypatch.setattr(scalars.tools, "date_range", lambda *a, **kw: ["2026-10-11"])
+    monkeypatch.setattr(scalars.settings, "keyedscalars", [{"key": k} for k in ["a", "b", "c"]])
+    cursor = Mock()
+    cursor.fetchall.side_effect = [
+        [{"key": "one", "count": 1}],
+        [{"_col0": 10}],
+        [{"key": "two", "count": 2}],
+        [{"key": "three", "count": 3}],
+    ]
+    connect = Mock()
+    connect.return_value.cursor.return_value = cursor
+    monkeypatch.setattr(scalars.tools.pyathena, "connect", connect)
+    result = scalars.collect({}, dt.date(2026, 10, 11))
+    connect.assert_called_once()
+    connect.return_value.cursor.assert_called_once_with(DictCursor)
+    assert cursor.execute.call_count == 4
+    assert all(result[k]["2026-10-11"]["count"] == 10 for k in ["a", "b", "c"])
+
+
+@pytest.mark.parametrize("row", [["2026-10-10", "140.0", "2"], ["2026-10-11", "140.0", "-2"]])
+def test_bad_aus_aggregate_rejects_whole_dependent_day(monkeypatch, row):
+    athena = Mock()
+    athena.rows.return_value = [["2026-10-11", "140.0", "10"], row]
+    monkeypatch.setattr(cloudfront, "Athena", lambda *a: athena)
+    with pytest.raises(ValueError):
+        cloudfront.collect_source(
+            Mock(),
+            object(),
+            Config("bucket"),
+            "2026-10-11",
+            "aus",
+            {"bucket": "source", "objects": []},
+            "run",
+            Failures(),
+        )
+
+
+def test_discarded_atn_rows_are_counted_without_failing_good_rows(monkeypatch):
+    athena = Mock()
+    athena.executions = []
+    athena.rows.return_value = [["2026-10-11", "addon", "version", "1", ""], ["bad"]]
+    monkeypatch.setattr(cloudfront, "Athena", lambda *a: athena)
+    failures = Failures()
+    result = cloudfront.collect_source(
+        Mock(),
+        object(),
+        Config("bucket"),
+        "2026-10-11",
+        "atn",
+        {"bucket": "source", "objects": []},
+        "run",
+        failures,
+        groups={"version"},
+    )
+    assert len(result["rows"]["version"]) == 1
+    assert not failures.errors
+    assert failures.warnings == [{"component": "atn/2026-10-11/version", "discarded_rows": 1}]
+
+
+def test_discarded_row_counts_reach_durable_checkpoint_and_report(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    sources(monkeypatch)
+    collect = pipeline.collect_source
+    warning = {"component": "atn/2026-10-11/version", "discarded_rows": 1}
+
+    def warned(*args, **kwargs):
+        if args[5] == "atn":
+            args[8].warnings.append(warning)
+        return collect(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "collect_source", warned)
+    report = directory / "report-output.json"
+    saved = pipeline.run(config, directory, "code", component="daily", report=report)
+    assert warning in saved["checkpoints"]["daily"]["warnings"]
+    assert warning in json.loads(report.read_bytes())["warnings"]

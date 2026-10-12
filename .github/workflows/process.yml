@@ -23,8 +23,11 @@ permissions:
   contents: read
   id-token: write
 jobs:
+  policy:
+    uses: ./.github/workflows/collection-policy.yml
   daily:
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: policy
+    if: needs.policy.outputs.allowed == 'true'
     uses: ./.github/workflows/collect-component.yml
     with:
       component: daily
@@ -33,7 +36,8 @@ jobs:
       through: ${{ inputs.through || '' }}
     secrets: inherit
   weekly:
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: policy
+    if: needs.policy.outputs.allowed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -45,8 +49,8 @@ jobs:
       through: ${{ inputs.through || '' }}
     secrets: inherit
   mau:
-    needs: daily
-    if: always() && !cancelled() && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: [policy, daily]
+    if: always() && !cancelled() && needs.policy.outputs.allowed == 'true'
     uses: ./.github/workflows/collect-component.yml
     with:
       component: mau
@@ -55,16 +59,16 @@ jobs:
       verify_access: ${{ inputs.verify_access || false }}
     secrets: inherit
   publish-daily:
-    needs: daily
-    if: always() && !cancelled() && (inputs.namespace || 'prod') == 'prod' && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: [policy, daily]
+    if: always() && !cancelled() && needs.policy.outputs.allowed == 'true' && (inputs.namespace || 'prod') == 'prod'
     uses: ./.github/workflows/publish-static.yml
     with:
       environment: production
       website_ref: prod
     secrets: inherit
   publish-weekly:
-    needs: [weekly, mau]
-    if: always() && !cancelled() && (inputs.namespace || 'prod') == 'prod' && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    needs: [policy, weekly, mau]
+    if: always() && !cancelled() && needs.policy.outputs.allowed == 'true' && (inputs.namespace || 'prod') == 'prod'
     uses: ./.github/workflows/publish-static.yml
     with:
       environment: production

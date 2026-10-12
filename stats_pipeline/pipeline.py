@@ -131,7 +131,8 @@ def collect_daily(
             or start is not None
         )
         atn_done = (
-            sources["atn"] is not None
+            start is None
+            and sources["atn"] is not None
             and "artifacts" in previous
             and previous.get("atn_fingerprint", previous.get("fingerprints", {}).get("atn"))
             == fingerprints.get("atn")
@@ -140,6 +141,10 @@ def collect_daily(
             pending.discard(key)
             continue
         current = copy.deepcopy(previous)
+        if "artifacts" in current:
+            # Old snapshots tracked one fingerprint for both ADI and ATN.
+            # Freeze the artifact's fingerprint before ADI can advance alone.
+            current.setdefault("atn_fingerprint", previous.get("fingerprints", {}).get("atn"))
         current["last_attempt"] = dt.datetime.now(dt.UTC).isoformat()
         provenance = {kind: value for kind, value in sources.items() if value}
         source_key = f"{config.prefix}/sources/{run_id}/{key}.json"
@@ -168,7 +173,7 @@ def collect_daily(
                 )
                 atn_done = True
         aus = None
-        if sources["aus"] and needs_adi:
+        if sources["aus"] and needs_adi and atn and {"app", "version"} <= atn["rows"].keys():
             aus = failures.attempt(
                 f"aus/{key}",
                 collect_source,
@@ -381,6 +386,7 @@ def _collect_component(
         "through": through.isoformat(),
         "summary": summary,
         "errors": failures.errors.copy(),
+        "warnings": failures.warnings.copy(),
         **details,
     }
     saved = store.snapshot(directory, run_id, checkpoints, revision, etag)
@@ -429,8 +435,18 @@ def run(
             errors.append({"component": name, "error": str(error), "type": type(error).__name__})
             logging.exception("Failed %s; continuing independent components", name)
     if report:
+        warnings = [
+            warning
+            for name in names
+            for warning in (manifest or {}).get("checkpoints", {}).get(name, {}).get("warnings", [])
+        ]
         atomic_json(
-            report, {"snapshot": manifest["run_id"] if manifest else None, "errors": errors}
+            report,
+            {
+                "snapshot": manifest["run_id"] if manifest else None,
+                "errors": errors,
+                "warnings": warnings,
+            },
         )
     if errors:
         raise CollectionFailed(manifest, errors)
