@@ -6,9 +6,6 @@ on:
 permissions:
   contents: read
   id-token: write
-concurrency:
-  group: ${{ github.ref_name == 'stage' && 'stats-staging' || 'stats-production' }}
-  cancel-in-progress: false
 jobs:
   publish:
     if: (github.ref_name == 'prod' || github.ref_name == 'stage') && vars.STATS_DEPLOY_ENABLED == 'true'
@@ -17,4 +14,3 @@ jobs:
       environment: ${{ github.ref_name == 'stage' && 'staging' || 'production' }}
       website_ref: ${{ github.ref_name }}
     secrets: inherit
-

@@ -2,108 +2,461 @@ import copy
 import datetime as dt
 import logging
 from pathlib import Path
+import tempfile
 import uuid
 
 import boto3
 from botocore.config import Config as BotoConfig
 
-from tools import globaladdons, monthlyusers, platlang, scalars, settings, sumo
+from tools import globaladdons, monthlyusers, platlang, scalars, settings
+from . import sumo
 from .adi import build_derived
-from .cloudfront import SEAMONKEY, THEME, adi_record, collect, source_manifest
-from .common import atomic_json, dates, json_bytes, utc_today
+from .artifacts import GROUPS
+from .cloudfront import SEAMONKEY, THEME, adi_record, collect_source, source_manifest
+from .common import Failures, atomic_json, atomic_write, dates, json_bytes, utc_today
 from .state import Store
-from .validation import read_data, validate
+from .validation import check_freshness, merge_records, read_data, validate, validate_record
+
+COMPONENTS = ("daily", "mau", "addons", "scalars", "platforms", "locales", "sumo")
+WEEKLY = {
+    "addons": ("addon_stats.json", globaladdons.collect),
+    "scalars": ("telemetry.json", scalars.collect),
+    "platforms": (
+        "platforms.json",
+        lambda data, through, **kw: platlang.collect(
+            data, through, platlang.run_platform_query, **kw
+        ),
+    ),
+    "locales": (
+        "locales.json",
+        lambda data, through, **kw: platlang.collect(
+            data, through, platlang.run_locale_query, **kw
+        ),
+    ),
+}
 
 
-def handoff(store, manifest):
-    """Repeatable after a crash between snapshot commit and handoff publication."""
-    if store.prefix != "prod":
-        return
-    for day, value in manifest["checkpoints"].get("sources", {}).items():
-        if "artifacts" not in value:
+class CollectionFailed(RuntimeError):
+    def __init__(self, manifest, errors):
+        self.manifest, self.errors = manifest, errors
+        super().__init__("; ".join(f"{e['component']}: {e['error']}" for e in errors))
+
+
+def handoff(store, manifest, failures):
+    """Retry each committed handoff independently of other days and collectors."""
+    if store.prefix == "prod":
+        for day, value in manifest["checkpoints"].get("sources", {}).items():
+            if "artifacts" in value:
+                failures.attempt(
+                    f"handoff/{day}",
+                    store.ready,
+                    day,
+                    {
+                        "schema": 1,
+                        "day": day,
+                        "revision": value["revision"],
+                        "artifacts": value["artifacts"],
+                    },
+                )
+
+
+def recalculate_mau(data, adi, through, failures):
+    result, _, _ = monthlyusers.collect(
+        copy.deepcopy(data),
+        adi,
+        through,
+        recalculate=True,
+        add_missing=False,
+        on_error=lambda day, error: failures.record(f"mau/coverage/{day}", error),
+    )
+    return result
+
+
+def collect_daily(
+    config,
+    directory,
+    baseline,
+    checkpoints,
+    store,
+    session,
+    run_id,
+    through,
+    start,
+    max_days,
+    failures,
+):
+    adi = copy.deepcopy(baseline["thunderbird_adi.json"])
+    latest = dt.date.fromisoformat(max(adi))
+    if through < latest and not start:
+        raise ValueError("Historical processing requires an explicit --start")
+    first = start or min(
+        latest + dt.timedelta(days=1), through - dt.timedelta(days=config.late_days - 1)
+    )
+    pending = set(checkpoints.get("daily", {}).get("pending", []))
+    days = sorted(
+        set(dates(first, through))
+        | {dt.date.fromisoformat(day) for day in pending if day <= through.isoformat()}
+    )
+    if max_days < 1:
+        raise ValueError("--max-days must be positive")
+    if len(days) > max_days and start:
+        raise ValueError(f"{len(days)} dates exceeds --max-days={max_days}")
+    source_state = checkpoints.setdefault("sources", {})
+    if len(days) > max_days:
+        recent = through - dt.timedelta(days=config.late_days - 1)
+        # Always give current data a slot, then rotate older retries. A set
+        # of permanently unavailable old days must not monopolize the limit.
+        days.sort(
+            key=lambda day: (
+                day < recent,
+                source_state.get(str(day), {}).get("last_attempt", "") if day < recent else "",
+                day.toordinal() if day < recent else -day.toordinal(),
+            )
+        )
+    deferred = {day.isoformat() for day in days[max_days:]}
+    days = days[:max_days]
+    collected, complete, atn_complete = {}, {}, set()
+    for day in days:
+        key = day.isoformat()
+        sources = {
+            kind: failures.attempt(f"{kind}/{key}/sources", source_manifest, store.s3, kind, key)
+            for kind in ("atn", "aus")
+        }
+        fingerprints = {kind: source["sha256"] for kind, source in sources.items() if source}
+        previous = source_state.get(key, {})
+        force = start is not None or previous.get("forced", False)
+        needs_adi = (
+            key not in adi
+            or len(fingerprints) != 2
+            or previous.get("fingerprints") != fingerprints
+            or force
+        )
+        atn_done = (
+            not force
+            and sources["atn"] is not None
+            and "artifacts" in previous
+            and previous.get("atn_fingerprint", previous.get("fingerprints", {}).get("atn"))
+            == fingerprints.get("atn")
+        )
+        if not needs_adi and atn_done:
+            pending.discard(key)
             continue
-        ready = {"schema": 1, "day": day, "revision": value["revision"],
-                 "artifacts": value["artifacts"]}
-        store.ready(day, ready)
+        current = copy.deepcopy(previous)
+        if force:
+            current["forced"] = True
+        if "artifacts" in current:
+            # Old snapshots tracked one fingerprint for both ADI and ATN.
+            # Freeze the artifact's fingerprint before ADI can advance alone.
+            current.setdefault("atn_fingerprint", previous.get("fingerprints", {}).get("atn"))
+        current["last_attempt"] = dt.datetime.now(dt.UTC).isoformat()
+        provenance = {kind: value for kind, value in sources.items() if value}
+        source_key = f"{config.prefix}/sources/{run_id}/{key}.json"
+        if provenance:
+            store.put(source_key, json_bytes(provenance), IfNoneMatch="*")
+            current["source_key"] = source_key
+        atn = None
+        # A completed ATN handoff needs no re-query while AUS is unavailable.
+        if sources["atn"] and (not atn_done or (needs_adi and sources["aus"])):
+            atn = failures.attempt(
+                f"atn/{key}",
+                collect_source,
+                store.s3,
+                session.client("athena"),
+                config,
+                key,
+                "atn",
+                sources["atn"],
+                run_id,
+                failures,
+                groups={"app", "version"} if atn_done else None,
+            )
+            if atn and set(atn["artifacts"]) == set(GROUPS.values()):
+                current.update(
+                    artifacts=atn["artifacts"], revision=run_id, atn_fingerprint=fingerprints["atn"]
+                )
+                atn_done = True
+        aus = None
+        if sources["aus"] and needs_adi and atn and {"app", "version"} <= atn["rows"].keys():
+            aus = failures.attempt(
+                f"aus/{key}",
+                collect_source,
+                store.s3,
+                session.client("athena"),
+                config,
+                key,
+                "aus",
+                sources["aus"],
+                run_id,
+                failures,
+            )
+        if atn and {"app", "version"} <= atn["rows"].keys() and aus is not None:
+            collected[key] = (atn["rows"], aus)
+            complete[key] = fingerprints
+        source_state[key] = current
+        if atn_done:
+            atn_complete.add(key)
+        if not atn_done or (needs_adi and key not in collected):
+            pending.add(key)
+        else:
+            pending.discard(key)
+    if collected:
+        last = max(collected)
+        seamonkeys = {
+            r[3] for r in collected[last][0]["app"] if r[1] == THEME and r[2] == SEAMONKEY
+        }
+        updated = copy.deepcopy(adi)
+        accepted = set()
+        for key, (rows, aus) in collected.items():
+
+            def make_record(rows=rows, aus=aus, key=key):
+                record = adi_record(rows["version"], aus, seamonkeys)
+                validate_record("thunderbird_adi.json", key, record)
+                return record
+
+            record = failures.attempt(f"daily/ADI/{key}", make_record)
+            if record is not None:
+                updated[key] = record
+                accepted.add(key)
+            else:
+                pending.add(key)
+        # Build everything before touching the working snapshot. A disk write
+        # failure aborts this component; it cannot publish a partial derived set.
+        with tempfile.TemporaryDirectory(dir=directory) as temp:
+            # The existing generator may archive the previous beta series.
+            # Give it the complete prior snapshot as well as the updated ADI.
+            for path in directory.glob("*.json"):
+                atomic_write(Path(temp) / path.name, path.read_bytes())
+            atomic_json(Path(temp) / "thunderbird_adi.json", updated)
+
+            def derive():
+                build_derived(updated, temp)
+                return True
+
+            built = failures.attempt("daily/derived", derive)
+            if built:
+                for path in Path(temp).glob("*.json"):
+                    atomic_write(directory / path.name, path.read_bytes())
+                adi = updated
+                for key in accepted:
+                    source_state[key]["fingerprints"] = complete[key]
+                    if key in atn_complete:
+                        source_state[key].pop("forced", None)
+            else:
+                pending.update(collected)
+    adjusted = recalculate_mau(baseline["thunderbird_ami.json"], adi, through, failures)
+    atomic_json(directory / "thunderbird_ami.json", adjusted)
+    if through.isoformat() not in adi:
+        failures.record("daily/coverage", ValueError(f"ADI is not complete through {through}"))
+    return sorted(pending | deferred)
 
 
-def run(config, directory, revision, *, through=None, start=None, component="metrics", max_days=32, refresh_week=None):
+def _run_component(
+    config, directory, revision, component, through, start, max_days, refresh_week, failures
+):
+    directory = Path(directory)
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    # Never let files from an interrupted run or another component enter the
+    # authoritative snapshot. Each transaction starts from an exact restore.
+    with tempfile.TemporaryDirectory(dir=directory.parent, prefix=".collect-") as work:
+        return _collect_component(
+            config,
+            Path(work),
+            directory,
+            revision,
+            component,
+            through,
+            start,
+            max_days,
+            refresh_week,
+            failures,
+        )
+
+
+def _collect_component(
+    config, directory, output_directory, revision, component, through, start, max_days, refresh_week,
+    failures,
+):
+    directory = Path(directory)
+    session = boto3.Session(region_name=config.region)
+    s3 = session.client(
+        "s3",
+        config=BotoConfig(max_pool_connections=16, retries={"mode": "standard", "max_attempts": 4}),
+    )
+    store = Store(s3, config)
+    manifest, etag = store.current()
+    if manifest is None:
+        raise ValueError("Seed authoritative state before running collectors")
+    store.restore(manifest, directory)
+    validate(directory)
+    baseline = read_data(directory)
+    checkpoints = copy.deepcopy(manifest["checkpoints"])
+    run_id = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
+    details = {}
+    if component == "daily":
+        details["pending"] = collect_daily(
+            config,
+            directory,
+            baseline,
+            checkpoints,
+            store,
+            session,
+            run_id,
+            through,
+            start,
+            max_days,
+            failures,
+        )
+    elif component == "sumo":
+        details["source"] = {}
+        result = failures.attempt(
+            "sumo",
+            sumo.collect,
+            baseline["sumo.json"],
+            through,
+            source_info=details["source"],
+            on_error=lambda day, error: failures.record(f"sumo/{day}", error),
+        )
+        if result is not None:
+            atomic_json(
+                directory / "sumo.json",
+                merge_records("sumo.json", baseline["sumo.json"], result, failures.record),
+            )
+        if not details["source"]:
+            details["source"] = checkpoints.get("sumo", {}).get("source", {})
+    else:
+        settings.s3bucket = config.telemetry_results
+        settings.workgroup = config.telemetry_workgroup
+        if component == "mau":
+            filename = "thunderbird_ami.json"
+            result = failures.attempt(
+                "mau",
+                monthlyusers.collect,
+                copy.deepcopy(baseline[filename]),
+                baseline["thunderbird_adi.json"],
+                through,
+                recalculate=True,
+                on_error=lambda day, error: failures.record(f"mau/{day}", error),
+            )
+            if result is not None:
+                atomic_json(
+                    directory / filename,
+                    merge_records(filename, baseline[filename], result[0], failures.record),
+                )
+        else:
+            filename, collector = WEEKLY[component]
+            existing = copy.deepcopy(baseline[filename])
+            if refresh_week:
+                records = existing.values() if component == "scalars" else [existing]
+                for values in records:
+                    values.pop(refresh_week.isoformat(), None)
+            result = failures.attempt(
+                component,
+                collector,
+                existing,
+                through,
+                on_error=lambda day, error: failures.record(f"{component}/{day}", error),
+            )
+            if result is not None:
+                if component == "scalars":
+                    result = {
+                        scalar: merge_records(
+                            scalar, baseline[filename].get(scalar, {}), values, failures.record
+                        )
+                        for scalar, values in result.items()
+                    }
+                else:
+                    result = merge_records(filename, baseline[filename], result, failures.record)
+                atomic_json(directory / filename, result)
+        records = read_data(directory)[filename]
+        if component == "scalars":
+            latest_sunday = through - dt.timedelta(days=(through.weekday() + 1) % 7)
+            for definition in settings.keyedscalars:
+                if not scalars.is_scalar_started(definition.get("start"), latest_sunday):
+                    continue
+                scalar = definition["key"]
+                failures.attempt(
+                    f"scalars/{scalar}/freshness",
+                    check_freshness,
+                    scalar,
+                    records.get(scalar, {}),
+                    through,
+                )
+        else:
+            failures.attempt(f"{component}/freshness", check_freshness, filename, records, through)
+    try:
+        summary = validate(directory, baseline)
+    except Exception as error:
+        # A malformed result must not contaminate the next independent component.
+        raise CollectionFailed(
+            manifest,
+            failures.errors
+            + [{"component": component, "type": type(error).__name__, "error": str(error)}],
+        ) from error
+    checkpoints[component] = {
+        "through": through.isoformat(),
+        "summary": summary,
+        "errors": failures.errors.copy(),
+        "warnings": failures.warnings.copy(),
+        **details,
+    }
+    saved = store.snapshot(directory, run_id, checkpoints, revision, etag)
+    handoff(store, saved, failures)
+    failures.attempt("local-output", store.restore, saved, output_directory)
+    logging.info("Validated snapshot %s (%s)", run_id, component)
+    if failures.errors:
+        raise CollectionFailed(saved, failures.errors)
+    return saved
+
+
+def run(
+    config,
+    directory,
+    revision,
+    *,
+    through=None,
+    start=None,
+    component="metrics",
+    max_days=32,
+    refresh_week=None,
+    report=None,
+):
     through = through or utc_today() - dt.timedelta(days=1)
+    if component == "sumo":
+        through = min(through, sumo.latest_complete_day())
     if through >= utc_today():
         raise ValueError("Only complete UTC days can be processed")
     if config.prefix == "stage":
         raise ValueError("Staging is read-only; use shadow for experimental collection")
     if refresh_week and (refresh_week.weekday() != 6 or refresh_week > through):
         raise ValueError("--refresh-week must be a completed Sunday")
-    directory = Path(directory)
-    session = boto3.Session(region_name=config.region)
-    s3 = session.client("s3", config=BotoConfig(max_pool_connections=16,
-                                                retries={"mode": "standard", "max_attempts": 4}))
-    store = Store(s3, config)
-    manifest, etag = store.current()
-    if manifest is None:
-        raise ValueError("Seed authoritative state before running collectors")
-    store.restore(manifest, directory)
-    baseline = read_data(directory)
-    checkpoints = copy.deepcopy(manifest["checkpoints"])
-    run_id = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
-    if component == "sumo":
-        atomic_json(directory / "sumo.json", sumo.collect(baseline["sumo.json"], through))
-    else:
-        adi = baseline["thunderbird_adi.json"].copy()
-        latest = dt.date.fromisoformat(max(adi))
-        if through < latest and not start:
-            raise ValueError("Historical processing requires an explicit --start")
-        first = start or min(latest + dt.timedelta(days=1), through - dt.timedelta(days=config.late_days-1))
-        days = list(dates(first, through))
-        if len(days) > max_days:
-            raise ValueError(f"{len(days)} dates exceeds --max-days={max_days}; run a bounded backfill")
-        changed, collected = [], {}
-        source_state = checkpoints.setdefault("sources", {})
-        for day in days:
-            key = day.isoformat()
-            sources = {kind: source_manifest(s3, kind, key) for kind in ("atn", "aus")}
-            fingerprint = {kind: value["sha256"] for kind, value in sources.items()}
-            previous = source_state.get(key, {})
-            if not start and previous.get("fingerprints") == fingerprint and key in adi:
-                continue
-            rows, aus, artifacts = collect(s3, session.client("athena"), config, key, sources, run_id)
-            source_key = f"{config.prefix}/sources/{run_id}/{key}.json"
-            store.put(source_key, json_bytes(sources), IfNoneMatch="*")
-            collected[key] = (rows, aus)
-            source_state[key] = {"fingerprints": fingerprint, "artifacts": artifacts,
-                                 "source_key": source_key, "revision": run_id}
-            changed.append(key)
-        if changed:
-            # Legacy generation filters using the ending day's app counts for the whole run.
-            last = max(collected)
-            seamonkeys = {r[3] for r in collected[last][0]["app"] if r[1] == THEME and r[2] == SEAMONKEY}
-            for key, (rows, aus) in collected.items():
-                adi[key] = adi_record(rows["version"], aus, seamonkeys)
-            atomic_json(directory / "thunderbird_adi.json", adi)
-            build_derived(adi, directory)
-        # All weekly collectors preserve their Sunday anchors and recover missing weeks.
-        settings.s3bucket = config.telemetry_results
-        settings.workgroup = config.telemetry_workgroup
-        args = ["--input", str(directory/"thunderbird_ami.json"), "--adi", str(directory/"thunderbird_adi.json"),
-                "--through", through.isoformat()]
-        if changed:
-            args.append("--recalculate")
-        monthlyusers.main(args)
-        for name, fn in [("addon_stats.json", globaladdons.collect), ("telemetry.json", scalars.collect),
-                         ("platforms.json", lambda d, t: platlang.collect(d, t, platlang.run_platform_query)),
-                         ("locales.json", lambda d, t: platlang.collect(d, t, platlang.run_locale_query))]:
-            existing = copy.deepcopy(baseline[name])
-            if refresh_week:
-                if name == "telemetry.json":
-                    for records in existing.values():
-                        records.pop(refresh_week.isoformat(), None)
-                else:
-                    existing.pop(refresh_week.isoformat(), None)
-            atomic_json(directory / name, fn(existing, through))
-    summary = validate(directory, baseline, through if component == "metrics" else None)
-    checkpoints[component] = {"through": through.isoformat(), "summary": summary}
-    saved = store.snapshot(directory, run_id, checkpoints, revision, etag)
-    handoff(store, saved)
-    logging.info("Validated snapshot %s", run_id)
-    return saved
+    names = COMPONENTS[:-1] if component == "metrics" else [component]
+    if any(name not in COMPONENTS for name in names):
+        raise ValueError(f"Unknown component: {component}")
+    manifest, errors, warnings = None, [], []
+    for name in names:
+        failures = Failures()
+        try:
+            manifest = _run_component(
+                config, directory, revision, name, through, start, max_days, refresh_week, failures
+            )
+        except CollectionFailed as error:
+            manifest = error.manifest
+            errors.extend(error.errors)
+        except Exception as error:
+            errors.extend(failures.errors)
+            errors.append({"component": name, "error": str(error), "type": type(error).__name__})
+            logging.exception("Failed %s; continuing independent components", name)
+        finally:
+            warnings.extend(failures.warnings)
+    if report:
+        atomic_json(
+            report,
+            {
+                "snapshot": manifest["run_id"] if manifest else None,
+                "errors": errors,
+                "warnings": warnings,
+            },
+        )
+    if errors:
+        raise CollectionFailed(manifest, errors)
+    return manifest

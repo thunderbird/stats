@@ -47,13 +47,16 @@ def run_locale_query(curdate, num_days):
 def run_platform_query(curdate, num_days):
     return PlatLangUsers(curdate, num_days, settings.legacy_telemetry_versions).query_platforms()
 
-def collect(data, through, func):
+def collect(data, through, func, on_error=None):
     num_days = 6
     for daystring in tools.date_range(start_date, 7, through + datetime.timedelta(days=1)):
         if daystring not in data:
             print(daystring)
             curdate = datetime.date.fromisoformat(daystring)
-            data[daystring] = func(curdate, num_days)
+            try:
+                data[daystring] = func(curdate, num_days)
+            except Exception as error:
+                tools.record_failure(on_error, daystring, error)
     return data
 
 
