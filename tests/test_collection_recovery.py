@@ -290,3 +290,13 @@ def test_retired_and_not_yet_started_scalars_do_not_fail_freshness(collection, m
     saved = pipeline.run(config, directory, "code", component="scalars")
     assert saved["checkpoints"]["scalars"]["errors"] == []
     assert "retired" in json.loads((directory / "telemetry.json").read_bytes())
+
+
+def test_staged_derived_build_preserves_previous_beta_history(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    previous = {"2026-10-09": {"count": 5, "versions": {"141.0b1": 5}}}
+    atomic_json(directory / "beta_nightly_adi.json", previous)
+    store.snapshot(directory, "beta-history", {}, "code", store.current()[1])
+    sources(monkeypatch)
+    pipeline.run(config, directory, "code", component="daily")
+    assert json.loads((directory / "140beta_nightly_adi.json").read_bytes()) == previous

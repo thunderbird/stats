@@ -200,6 +200,10 @@ def collect_daily(
         # Build everything before touching the working snapshot. A disk write
         # failure aborts this component; it cannot publish a partial derived set.
         with tempfile.TemporaryDirectory(dir=directory) as temp:
+            # The existing generator may archive the previous beta series.
+            # Give it the complete prior snapshot as well as the updated ADI.
+            for path in directory.glob("*.json"):
+                atomic_write(Path(temp) / path.name, path.read_bytes())
             atomic_json(Path(temp) / "thunderbird_adi.json", updated)
 
             def derive():
