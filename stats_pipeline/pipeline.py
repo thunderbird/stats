@@ -115,7 +115,7 @@ def collect_daily(
         )
     deferred = {day.isoformat() for day in days[max_days:]}
     days = days[:max_days]
-    collected, complete = {}, {}
+    collected, complete, atn_complete = {}, {}, set()
     for day in days:
         key = day.isoformat()
         sources = {
@@ -124,14 +124,15 @@ def collect_daily(
         }
         fingerprints = {kind: source["sha256"] for kind, source in sources.items() if source}
         previous = source_state.get(key, {})
+        force = start is not None or previous.get("forced", False)
         needs_adi = (
             key not in adi
             or len(fingerprints) != 2
             or previous.get("fingerprints") != fingerprints
-            or start is not None
+            or force
         )
         atn_done = (
-            start is None
+            not force
             and sources["atn"] is not None
             and "artifacts" in previous
             and previous.get("atn_fingerprint", previous.get("fingerprints", {}).get("atn"))
@@ -141,6 +142,8 @@ def collect_daily(
             pending.discard(key)
             continue
         current = copy.deepcopy(previous)
+        if force:
+            current["forced"] = True
         if "artifacts" in current:
             # Old snapshots tracked one fingerprint for both ADI and ATN.
             # Freeze the artifact's fingerprint before ADI can advance alone.
@@ -190,6 +193,8 @@ def collect_daily(
             collected[key] = (atn["rows"], aus)
             complete[key] = fingerprints
         source_state[key] = current
+        if atn_done:
+            atn_complete.add(key)
         if not atn_done or (needs_adi and key not in collected):
             pending.add(key)
         else:
@@ -234,6 +239,8 @@ def collect_daily(
                 adi = updated
                 for key in accepted:
                     source_state[key]["fingerprints"] = complete[key]
+                    if key in atn_complete:
+                        source_state[key].pop("forced", None)
             else:
                 pending.update(collected)
     adjusted = recalculate_mau(baseline["thunderbird_ami.json"], adi, through, failures)
@@ -243,7 +250,9 @@ def collect_daily(
     return sorted(pending | deferred)
 
 
-def _run_component(config, directory, revision, component, through, start, max_days, refresh_week):
+def _run_component(
+    config, directory, revision, component, through, start, max_days, refresh_week, failures
+):
     directory = Path(directory)
     directory.parent.mkdir(parents=True, exist_ok=True)
     # Never let files from an interrupted run or another component enter the
@@ -259,11 +268,13 @@ def _run_component(config, directory, revision, component, through, start, max_d
             start,
             max_days,
             refresh_week,
+            failures,
         )
 
 
 def _collect_component(
-    config, directory, output_directory, revision, component, through, start, max_days, refresh_week
+    config, directory, output_directory, revision, component, through, start, max_days, refresh_week,
+    failures,
 ):
     directory = Path(directory)
     session = boto3.Session(region_name=config.region)
@@ -280,7 +291,6 @@ def _collect_component(
     baseline = read_data(directory)
     checkpoints = copy.deepcopy(manifest["checkpoints"])
     run_id = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:12]
-    failures = Failures()
     details = {}
     if component == "daily":
         details["pending"] = collect_daily(
@@ -422,24 +432,23 @@ def run(
     names = COMPONENTS[:-1] if component == "metrics" else [component]
     if any(name not in COMPONENTS for name in names):
         raise ValueError(f"Unknown component: {component}")
-    manifest, errors = None, []
+    manifest, errors, warnings = None, [], []
     for name in names:
+        failures = Failures()
         try:
             manifest = _run_component(
-                config, directory, revision, name, through, start, max_days, refresh_week
+                config, directory, revision, name, through, start, max_days, refresh_week, failures
             )
         except CollectionFailed as error:
             manifest = error.manifest
             errors.extend(error.errors)
         except Exception as error:
+            errors.extend(failures.errors)
             errors.append({"component": name, "error": str(error), "type": type(error).__name__})
             logging.exception("Failed %s; continuing independent components", name)
+        finally:
+            warnings.extend(failures.warnings)
     if report:
-        warnings = [
-            warning
-            for name in names
-            for warning in (manifest or {}).get("checkpoints", {}).get(name, {}).get("warnings", [])
-        ]
         atomic_json(
             report,
             {

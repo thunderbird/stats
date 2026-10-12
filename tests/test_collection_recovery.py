@@ -366,6 +366,31 @@ def test_explicit_backfill_always_creates_fresh_atn_handoff(collection, monkeypa
     )
 
 
+@pytest.mark.parametrize("failure", ["atn", "aus"])
+def test_failed_forced_backfill_is_retried_without_start(collection, monkeypatch, failure):
+    config, store, directory, baseline, original = collection
+    day = "2026-10-11"
+    sources(monkeypatch)
+    first = pipeline.run(config, directory, "code", component="daily")
+    sources(
+        monkeypatch,
+        incomplete_atn=day if failure == "atn" else None,
+        fail_aus=day if failure == "aus" else None,
+    )
+    with pytest.raises(pipeline.CollectionFailed):
+        pipeline.run(config, directory, "code", component="daily", start=dt.date.fromisoformat(day))
+    assert store.current()[0]["checkpoints"]["sources"][day]["forced"] is True
+    sources(monkeypatch)
+    collector = Mock(wraps=pipeline.collect_source)
+    monkeypatch.setattr(pipeline, "collect_source", collector)
+    saved = pipeline.run(config, directory, "code", component="daily")
+    current = saved["checkpoints"]["sources"][day]
+    assert "forced" not in current
+    assert current["revision"] != first["checkpoints"]["sources"][day]["revision"]
+    assert saved["checkpoints"]["daily"]["pending"] == []
+    assert next(c.kwargs["groups"] for c in collector.call_args_list if c.args[4] == "atn") is None
+
+
 def test_missing_atn_source_does_not_run_useless_aus_query(collection, monkeypatch):
     config, store, directory, baseline, original = collection
 
@@ -460,3 +485,35 @@ def test_discarded_row_counts_reach_durable_checkpoint_and_report(collection, mo
     saved = pipeline.run(config, directory, "code", component="daily", report=report)
     assert warning in saved["checkpoints"]["daily"]["warnings"]
     assert warning in json.loads(report.read_bytes())["warnings"]
+
+
+@pytest.mark.parametrize("failure", ["validation", "snapshot"])
+def test_uncommitted_run_reports_its_own_warnings(collection, monkeypatch, failure):
+    config, store, directory, baseline, original = collection
+    stale = {"component": "old-run", "discarded_rows": 99}
+    store.snapshot(directory, "old-warnings", {"daily": {"warnings": [stale]}}, "code", store.current()[1])
+    sources(monkeypatch)
+    collect = pipeline.collect_source
+    current = {"component": "current-run", "discarded_rows": 1}
+
+    def warned(*args, **kwargs):
+        if args[4] == "atn" and args[3] == "2026-10-11":
+            args[7].warnings.append(current)
+        return collect(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "collect_source", warned)
+    if failure == "snapshot":
+        monkeypatch.setattr(Store, "snapshot", Mock(side_effect=OSError("snapshot unavailable")))
+    else:
+        validate = pipeline.validate
+
+        def invalid(directory, baseline=None):
+            if baseline is not None:
+                raise ValueError("validation failed")
+            return validate(directory)
+
+        monkeypatch.setattr(pipeline, "validate", invalid)
+    report = directory / "current-report.json"
+    with pytest.raises(pipeline.CollectionFailed):
+        pipeline.run(config, directory, "code", component="daily", report=report)
+    assert json.loads(report.read_bytes())["warnings"] == [current]

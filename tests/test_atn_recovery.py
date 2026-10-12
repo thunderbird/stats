@@ -1,3 +1,4 @@
+import ast
 import datetime as dt
 import json
 from unittest.mock import Mock
@@ -218,3 +219,42 @@ def test_catalog_and_import_totals_use_separate_jobs_and_locks():
     assert "update_global_totals(" not in catalog  # legacy task swallows SQL errors
     compile(catalog, "<catalog>", "exec")
     compile(totals, "<totals>", "exec")
+
+
+def test_catalog_retry_preserves_successful_readings_and_retries_only_missing_totals():
+    wrapper = ast.parse(atn.container_script(operation="catalog"))
+    source = ast.literal_eval(wrapper.body[1].value.args[0].args[0])
+    function = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "write_totals")
+    rows = {("existing", DAY): 3}
+
+    class Cursor:
+        def execute(self, sql, params):
+            if sql.startswith("REPLACE"):
+                name, count, day = params
+                rows[name, day] = count
+            else:
+                self.value = rows.get(tuple(params))
+
+        def fetchone(self):
+            return (self.value,) if self.value is not None else None
+
+        def close(self):
+            pass
+
+    namespace = {"connection": Mock(cursor=Cursor)}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<write-totals>", "exec"), namespace)
+    jobs = {
+        "existing": Mock(return_value=4),
+        "failed": Mock(side_effect=[RuntimeError("temporary"), 5]),
+        "good": Mock(return_value=6),
+    }
+    with pytest.raises(RuntimeError, match="temporary"):
+        namespace["write_totals"](DAY, jobs, preserve_existing=True)
+    assert rows == {("existing", DAY): 3, ("good", DAY): 6}
+    namespace["write_totals"](DAY, jobs, preserve_existing=True)
+    jobs["existing"].assert_not_called()
+    assert jobs["failed"].call_count == 2
+    jobs["good"].assert_called_once()
+    assert rows["failed", DAY] == 5
+    namespace["write_totals"](DAY, {"existing": jobs["existing"]})
+    assert rows["existing", DAY] == 4  # Import-dependent totals still refresh.

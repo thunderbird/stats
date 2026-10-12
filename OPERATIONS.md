@@ -112,7 +112,9 @@ Break longer catch-ups into bounded ranges; the CLI accepts `--max-days` for
 operator runs when a larger deliberate backfill is appropriate.
 An explicit `--start` backfill re-queries all five ATN dimensions and creates a
 new handoff revision even when source fingerprints are unchanged. The local
-consumer still respects its configured first-day ownership boundary.
+consumer still respects its configured first-day ownership boundary. Failed
+forced dates retain that intent so scheduled runs retry the full correction
+until both ATN artifacts and the ADI calculation succeed.
 
 For local operator commands, authenticate to AWS and set:
 
@@ -208,7 +210,10 @@ Catalog totals have their own local timer at **00:40 UTC**, preserving the old
 schedule. This records the seven yesterday-only counts even when log imports,
 search indexing or telemetry fail. The service uses a separate database lock
 and writes/verifies all 17 catalog totals, attempting later totals after one
-fails, and retries a failed run after five minutes. Per-date update-ping totals
+fails. Successful point-in-time readings are retained on retries; only missing
+totals are calculated again. A failed run retries after five minutes, up to six
+attempts within twelve hours. The next daily activation starts a fresh attempt
+window. Per-date update-ping totals
 stay with the consumer. Catalog counts are
 point-in-time measurements: after a missed day they cannot be reconstructed
 accurately from today's catalog. `Persistent=true` catches a missed activation

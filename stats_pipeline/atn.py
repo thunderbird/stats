@@ -50,11 +50,15 @@ settings.CELERY_TASK_ALWAYS_EAGER = True
 settings.CELERY_TASK_EAGER_PROPAGATES = True
 assert current_app.conf.task_always_eager and current_app.conf.task_eager_propagates
 
-def write_totals(date, jobs):
+def write_totals(date, jobs, preserve_existing=False):
     errors = []
     cursor = connection.cursor()
     for name, calculate in jobs.items():
         try:
+            if preserve_existing:
+                cursor.execute('SELECT count FROM global_stats WHERE name=%s AND date=%s', [name, date])
+                if cursor.fetchone() is not None:
+                    continue
             expected = int(calculate() or 0)
             cursor.execute('REPLACE INTO global_stats (name, count, date) VALUES (%s, %s, %s)',
                            [name, expected, date])
@@ -78,7 +82,7 @@ def run():
     cursor.close()
     if @@OPERATION@@ == 'catalog':
         date = datetime.date.today() - datetime.timedelta(days=1)
-        write_totals(date, stat_tasks._get_daily_jobs(date))
+        write_totals(date, stat_tasks._get_daily_jobs(date), preserve_existing=True)
         return
     if @@OPERATION@@ == 'average':
         # The legacy average explicitly chooses a replica. Read the primary
