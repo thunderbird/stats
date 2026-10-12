@@ -1,0 +1,91 @@
+name: Collect one statistics component
+on:
+  workflow_call:
+    inputs:
+      component:
+        required: true
+        type: string
+      namespace:
+        type: string
+        default: prod
+      start:
+        type: string
+        default: ''
+      through:
+        type: string
+        default: ''
+      verify_access:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    environment: stats-processing
+    concurrency:
+      group: stats-collect-${{ inputs.namespace }}
+      queue: max
+      cancel-in-progress: false
+    env:
+      STATS_BUCKET: ${{ vars.STATS_BUCKET }}
+      STATS_PREFIX: ${{ inputs.namespace }}
+      GLEAN_API_KEY: ${{ secrets.GLEAN_API_KEY }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: '0.9.2'
+          python-version: '3.13.7'
+          enable-cache: true
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+          role-duration-seconds: 21600
+      - run: uv sync --frozen --no-dev
+      - name: Verify telemetry and Glean access
+        id: access
+        if: inputs.verify_access
+        continue-on-error: true
+        run: |
+          uv run --frozen --no-dev python - <<'PY'
+          import datetime as dt
+          import boto3
+          from stats_pipeline.athena import Athena
+          from stats_pipeline.common import utc_today
+          from stats_pipeline.config import Config
+          from tools.monthlyusers import query_glean_data
+          config = Config.from_env()
+          query = Athena(boto3.client('athena', region_name='us-east-1'), 'default',
+                         config.telemetry_workgroup, config.telemetry_results)
+          day = (utc_today() - dt.timedelta(days=1)).strftime('%Y/%m/%d')
+          assert query.rows(f"SELECT 1 FROM telemetry_data WHERE date = '{day}' LIMIT 1")
+          assert query_glean_data()
+          PY
+      - name: Collect and retain successful results
+        id: collect
+        continue-on-error: true
+        env:
+          COMPONENT: ${{ inputs.component }}
+          START: ${{ inputs.start }}
+          THROUGH: ${{ inputs.through }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--component "$COMPONENT" --data .state --report collection-report.json)
+          if [[ -n "$START" ]]; then args+=(--start "$START"); fi
+          if [[ -n "$THROUGH" ]]; then args+=(--through "$THROUGH"); fi
+          uv run --frozen --no-dev tb-stats collect "${args[@]}"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: collection-${{ inputs.namespace }}-${{ inputs.component }}
+          path: collection-report.json
+          if-no-files-found: warn
+      - name: Report component failures
+        if: steps.collect.outcome != 'success' || steps.access.outcome == 'failure'
+        run: exit 1

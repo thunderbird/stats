@@ -167,13 +167,14 @@ code and installation configuration live in this repository:
    a lock before importing. Use the existing instance role for S3 access.
 3. Run the existing `update_counts_from_file --date=YYYY-MM-DD --stats_source=file`
    and `index_stats --date=YYYY-MM-DD` management commands locally. File mode
-   imports the exact immutable bytes verified by the consumer.
-4. Record completion durably after successful work. Verify actual command
-   idempotency and failure behavior before enabling retries or corrected-date
-   imports; do not assume reruns are harmless.
-5. Check dependencies and move `update_addon_average_daily_users` and
-   `update_global_totals` into the correctly ordered post-import sequence.
-   Their existing 00:20 and 00:40 UTC schedules precede the new processing job.
+   imports valid rows from the verified immutable revision, skipping malformed
+   records consistently with the producer.
+4. Checkpoint database import, indexing and per-date totals separately. Retry
+   only unfinished phases and continue other dates after an individual failure.
+5. Run `update_addon_average_daily_users` after its required database imports,
+   with a durable retry flag. Keep daily catalog totals on an independent
+   00:40 UTC local timer; those point-in-time measurements cannot wait for log
+   imports. Per-date update-ping totals remain dependent on import completion.
 6. Preserve unrelated ATN cron jobs. Choose a supported consumer runtime that
    works with the existing CentOS 7 host/container arrangement.
 

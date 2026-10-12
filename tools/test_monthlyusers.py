@@ -222,7 +222,8 @@ class GleanAPITests(unittest.TestCase):
         return result
 
     def test_request_failure_propagates_and_is_not_cached(self):
-        with patch.object(monthlyusers.requests, 'get', side_effect=OSError('offline')):
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            session.return_value.get.side_effect = OSError('offline')
             with self.assertRaisesRegex(OSError, 'offline'):
                 monthlyusers.query_glean_data()
         self.assertIsNone(monthlyusers._glean_cache)
@@ -231,17 +232,42 @@ class GleanAPITests(unittest.TestCase):
         for rows in [[], [{'received_day': '2025-05-04', 'mau': 0}],
                      [{'received_day': '2025-05-04', 'mau': 1}] * 2]:
             with self.subTest(rows=rows):
-                with patch.object(monthlyusers.requests, 'get', return_value=self.response(rows)):
+                with patch.object(monthlyusers.tools, 'http_session') as session:
+                    session.return_value.get.return_value = self.response(rows)
                     with self.assertRaises(ValueError):
                         monthlyusers.query_glean_data()
                 self.assertIsNone(monthlyusers._glean_cache)
 
     def test_valid_response_is_requested_once(self):
         rows = [{'received_day': '2025-05-04', 'mau': 12486661}]
-        with patch.object(monthlyusers.requests, 'get', return_value=self.response(rows)) as get:
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            get = session.return_value.get
+            get.return_value = self.response(rows)
             self.assertEqual(monthlyusers.query_glean_data(), {'2025-05-04': 12486661})
             monthlyusers.query_glean_data()
         get.assert_called_once()
+
+    def test_bad_glean_day_preserves_valid_days_without_caching_partial_response(self):
+        rows = [
+            {'received_day': '2025-05-04', 'mau': 12486661},
+            {'received_day': '2025-05-11', 'mau': 0},
+            {'received_day': '2025-05-18', 'mau': 13000000},
+        ]
+        errors = []
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            session.return_value.get.return_value = self.response(rows)
+            result = monthlyusers.query_glean_data(on_error=lambda day, error: errors.append(day))
+        self.assertEqual(result, {'2025-05-04': 12486661, '2025-05-18': 13000000})
+        self.assertEqual(errors, ['2025-05-11'])
+        self.assertIsNone(monthlyusers._glean_cache)
+
+    def test_duplicate_glean_day_does_not_choose_an_arbitrary_count(self):
+        rows = [{'received_day': '2025-05-04', 'mau': count} for count in (10, 11, 12)]
+        rows.append({'received_day': '2025-05-11', 'mau': 20})
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            session.return_value.get.return_value = self.response(rows)
+            result = monthlyusers.query_glean_data(on_error=lambda day, error: None)
+        self.assertEqual(result, {'2025-05-11': 20})
 
 
 if __name__ == '__main__':

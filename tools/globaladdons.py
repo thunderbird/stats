@@ -13,20 +13,21 @@ filename = Path(__file__).parent / '../docs/addon_stats.json'
 # 7 days of actual data.
 num_days = 6
 
-def collect(dataloc, through):
+def collect(dataloc, through, on_error=None):
     # One data point per week.
     for daystring in tools.date_range(start_date, 7, through + datetime.timedelta(days=1)):
         if daystring not in dataloc:
-            dataloc[daystring] = {}
-            print(daystring)
-            curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
-            q = tools.TotalAddonUsers(curdate, num_days, settings.legacy_telemetry_versions)
-            d = {
-                "total": q.query_totalusers().totalusers,
-                "addon_count": q.addon_totalusers,
-                "minustop10_count": q.query_totalusers(10).addon_totalusers
-            }
-            dataloc[daystring] = d
+            try:
+                print(daystring)
+                curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
+                q = tools.TotalAddonUsers(curdate, num_days, settings.legacy_telemetry_versions)
+                dataloc[daystring] = {
+                    "total": q.query_totalusers().totalusers,
+                    "addon_count": q.addon_totalusers,
+                    "minustop10_count": q.query_totalusers(10).addon_totalusers
+                }
+            except Exception as error:
+                tools.record_failure(on_error, daystring, error)
     return dataloc
 
 

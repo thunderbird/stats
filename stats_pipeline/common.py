@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -8,6 +9,32 @@ import tempfile
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+
+def record_failure(on_error, key, error):
+    """Standalone collectors fail normally; the pipeline can isolate a point."""
+    if on_error is None:
+        raise error
+    on_error(key, error)
+
+
+class Failures:
+    """Keep independent work running, while retaining an explicit failure result."""
+    def __init__(self):
+        self.errors = []
+        self.warnings = []
+
+    def attempt(self, label, function, *args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception as error:
+            self.record(label, error)
+            return None
+
+    def record(self, label, error):
+        self.errors.append({"component": label, "error": str(error),
+                            "type": type(error).__name__})
+        logging.error("Failed %s: %s; continuing independent work", label, error)
 
 
 def utc_today():
