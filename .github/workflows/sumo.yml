@@ -6,33 +6,16 @@ on:
 permissions:
   contents: read
   id-token: write
-concurrency:
-  group: stats-production
-  cancel-in-progress: false
 jobs:
   collect:
     if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
-    runs-on: ubuntu-24.04
-    environment: stats-processing
-    timeout-minutes: 120
-    env:
-      STATS_BUCKET: ${{ vars.STATS_BUCKET }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
-        with:
-          version: '0.9.2'
-          python-version: '3.13.7'
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: us-west-2
-          role-duration-seconds: 10800
-      - run: uv sync --frozen --no-dev
-      - name: Import complete Pacific days from aaq-scraper
-        run: uv run --frozen --no-dev tb-stats collect --component sumo --data .state
+    uses: ./.github/workflows/collect-component.yml
+    with:
+      component: sumo
+    secrets: inherit
   publish:
     needs: collect
+    if: always() && !cancelled() && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
     uses: ./.github/workflows/publish-static.yml
     with:
       environment: production

@@ -1,0 +1,10 @@
+[Unit]
+Description=Record ATN catalog totals daily at 00:40 UTC
+
+[Timer]
+OnCalendar=*-*-* 00:40:00 UTC
+Persistent=true
+Unit=stats-atn-catalog.service
+
+[Install]
+WantedBy=timers.target

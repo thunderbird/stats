@@ -13,6 +13,10 @@ permissions:
   id-token: write
 jobs:
   publish:
+    concurrency:
+      group: stats-publish-${{ inputs.environment }}
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: ${{ inputs.environment }}

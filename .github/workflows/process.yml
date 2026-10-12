@@ -22,70 +22,49 @@ on:
 permissions:
   contents: read
   id-token: write
-concurrency:
-  group: stats-production
-  cancel-in-progress: false
 jobs:
-  collect:
+  daily:
     if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 330
-    environment: stats-processing
-    env:
-      STATS_BUCKET: ${{ vars.STATS_BUCKET }}
-      STATS_PREFIX: ${{ inputs.namespace || 'prod' }}
-      GLEAN_API_KEY: ${{ secrets.GLEAN_API_KEY }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
-        with:
-          version: '0.9.2'
-          python-version: '3.13.7'
-          enable-cache: true
-      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
-          aws-region: us-west-2
-          role-duration-seconds: 21600
-      - run: uv sync --frozen --no-dev
-      - name: Verify telemetry and Glean access
-        if: inputs.verify_access
-        run: |
-          uv run --frozen --no-dev python - <<'PY'
-          import datetime as dt
-          import boto3
-          from stats_pipeline.athena import Athena
-          from stats_pipeline.common import utc_today
-          from stats_pipeline.config import Config
-          from tools.monthlyusers import query_glean_data
-          config = Config.from_env()
-          query = Athena(boto3.client('athena', region_name='us-east-1'), 'default',
-                         config.telemetry_workgroup, config.telemetry_results)
-          day = (utc_today() - dt.timedelta(days=1)).strftime('%Y/%m/%d')
-          assert query.rows(f"SELECT 1 FROM telemetry_data WHERE date = '{day}' LIMIT 1")
-          assert query_glean_data()
-          print('Telemetry source, Athena result access, and Glean key verified')
-          PY
-      - name: Collect complete UTC days
-        env:
-          START: ${{ inputs.start }}
-          THROUGH: ${{ inputs.through }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          args=()
-          if [[ -n "$START" ]]; then args+=(--start "$START"); fi
-          if [[ -n "$THROUGH" ]]; then args+=(--through "$THROUGH"); fi
-          uv run --frozen --no-dev tb-stats collect --data .state "${args[@]}"
-      - name: Record validated snapshot
-        run: uv run --frozen --no-dev tb-stats restore --data .state --manifest run-manifest.json
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: validated-manifest
-          path: run-manifest.json
-  publish:
-    needs: collect
-    if: (inputs.namespace || 'prod') == 'prod'
+    uses: ./.github/workflows/collect-component.yml
+    with:
+      component: daily
+      namespace: ${{ inputs.namespace || 'prod' }}
+      start: ${{ inputs.start || '' }}
+      through: ${{ inputs.through || '' }}
+    secrets: inherit
+  weekly:
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [addons, scalars, platforms, locales]
+    uses: ./.github/workflows/collect-component.yml
+    with:
+      component: ${{ matrix.component }}
+      namespace: ${{ inputs.namespace || 'prod' }}
+      through: ${{ inputs.through || '' }}
+    secrets: inherit
+  mau:
+    needs: daily
+    if: always() && !cancelled() && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    uses: ./.github/workflows/collect-component.yml
+    with:
+      component: mau
+      namespace: ${{ inputs.namespace || 'prod' }}
+      through: ${{ inputs.through || '' }}
+      verify_access: ${{ inputs.verify_access || false }}
+    secrets: inherit
+  publish-daily:
+    needs: daily
+    if: always() && !cancelled() && (inputs.namespace || 'prod') == 'prod' && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
+    uses: ./.github/workflows/publish-static.yml
+    with:
+      environment: production
+      website_ref: prod
+    secrets: inherit
+  publish-weekly:
+    needs: [weekly, mau]
+    if: always() && !cancelled() && (inputs.namespace || 'prod') == 'prod' && github.ref == 'refs/heads/master' && (github.event_name == 'workflow_dispatch' || vars.STATS_SCHEDULE_ENABLED == 'true')
     uses: ./.github/workflows/publish-static.yml
     with:
       environment: production

@@ -22,9 +22,11 @@ of users on older versions.
 
 The published methodology is preserved by this migration. When ADI inputs
 change, the pipeline recalculates existing factors while preserving raw Glean
-counts and records before May 4, 2025. It adds missing weekly points from Glean;
-API failures, invalid records and missing historical dates stop publication.
-A point newer than the available Glean results is retried on the next run.
+counts and records before May 4, 2025. It adds missing weekly points from Glean.
+API failures, invalid records and missing historical dates preserve the affected
+point's previous value and fail that collection job, while independent results
+can still be published. A point newer than the available Glean results is retried
+on the next run.
 
 For a reviewed correction, restore a snapshot and write a separate result:
 

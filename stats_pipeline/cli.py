@@ -9,7 +9,7 @@ import boto3
 
 from .common import atomic_json
 from .config import Config
-from .pipeline import run
+from .pipeline import COMPONENTS, run
 from .state import Store
 from .validation import validate
 from .website import build, finish_deploy, verify
@@ -27,7 +27,8 @@ def main(argv=None):
     collect.add_argument("--start", type=dt.date.fromisoformat)
     collect.add_argument("--max-days", type=int, default=32)
     collect.add_argument("--refresh-week", type=dt.date.fromisoformat)
-    collect.add_argument("--component", choices=["metrics", "sumo"], default="metrics")
+    collect.add_argument("--component", choices=['metrics', *COMPONENTS], default="metrics")
+    collect.add_argument("--report", type=Path, help="Write the snapshot and component failures")
     restore = sub.add_parser("restore")
     restore.add_argument("--data", type=Path, required=True)
     restore.add_argument("--manifest", type=Path, required=True)
@@ -83,7 +84,8 @@ def main(argv=None):
     elif args.command == "collect":
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         run(config, args.data, revision, through=args.through, start=args.start,
-            component=args.component, max_days=args.max_days, refresh_week=args.refresh_week)
+            component=args.component, max_days=args.max_days, refresh_week=args.refresh_week,
+            report=args.report)
     elif args.command == "finish-deploy":
         finish_deploy(store, json.loads(args.manifest.read_bytes()), args.output,
                       args.environment, args.revision)

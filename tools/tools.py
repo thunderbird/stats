@@ -11,6 +11,15 @@ import pyathena
 import re
 import urllib
 
+from stats_pipeline.common import http_session as http_session
+
+
+def record_failure(on_error, key, error):
+    """Standalone collectors fail normally; the pipeline can isolate a point."""
+    if on_error is None:
+        raise error
+    on_error(key, error)
+
 def collapse(data, stringcmp):
     result = collections.OrderedDict({stringcmp: 0})
     for k in data.keys():

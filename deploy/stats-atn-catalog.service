@@ -1,0 +1,11 @@
+[Unit]
+Description=Record daily ATN catalog statistics independently of imports
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=1800
+ExecStart=/usr/bin/docker run --rm --network host --security-opt label=disable --name stats-atn-catalog -v /var/run/docker.sock:/var/run/docker.sock thunderbird-stats-atn:current --catalog-only
+StandardOutput=journal
+StandardError=journal

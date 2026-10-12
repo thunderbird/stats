@@ -222,7 +222,8 @@ class GleanAPITests(unittest.TestCase):
         return result
 
     def test_request_failure_propagates_and_is_not_cached(self):
-        with patch.object(monthlyusers.requests, 'get', side_effect=OSError('offline')):
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            session.return_value.get.side_effect = OSError('offline')
             with self.assertRaisesRegex(OSError, 'offline'):
                 monthlyusers.query_glean_data()
         self.assertIsNone(monthlyusers._glean_cache)
@@ -231,14 +232,17 @@ class GleanAPITests(unittest.TestCase):
         for rows in [[], [{'received_day': '2025-05-04', 'mau': 0}],
                      [{'received_day': '2025-05-04', 'mau': 1}] * 2]:
             with self.subTest(rows=rows):
-                with patch.object(monthlyusers.requests, 'get', return_value=self.response(rows)):
+                with patch.object(monthlyusers.tools, 'http_session') as session:
+                    session.return_value.get.return_value = self.response(rows)
                     with self.assertRaises(ValueError):
                         monthlyusers.query_glean_data()
                 self.assertIsNone(monthlyusers._glean_cache)
 
     def test_valid_response_is_requested_once(self):
         rows = [{'received_day': '2025-05-04', 'mau': 12486661}]
-        with patch.object(monthlyusers.requests, 'get', return_value=self.response(rows)) as get:
+        with patch.object(monthlyusers.tools, 'http_session') as session:
+            get = session.return_value.get
+            get.return_value = self.response(rows)
             self.assertEqual(monthlyusers.query_glean_data(), {'2025-05-04': 12486661})
             monthlyusers.query_glean_data()
         get.assert_called_once()

@@ -24,8 +24,14 @@ independently, so an upstream SUMO failure does not prevent other publication.
 SUMO retains its historical Pacific day boundary: at 04:00 UTC the preceding
 Pacific day is still in progress, so it imports only through the last complete
 Pacific day. It also requires the upstream refresh watermark to cover that day.
-Both use one concurrency group. GitHub scheduling is best effort; missing days
-are recovered from the saved data. The 32-day bound applies to Athena metrics;
+Collection jobs share a queue per namespace (`stats-collect-prod` or
+`stats-collect-shadow`), serializing writes to each snapshot pointer. Website
+publication uses separate `stats-publish-production` and `stats-publish-staging`
+queues. Each uses `queue: max` with cancellation disabled, retaining up to 100
+waiting jobs rather than replacing a pending job. A deployment acquires its
+queue before restoring data, so it selects the latest validated snapshot.
+GitHub scheduling is best effort; missing days are recovered from saved data.
+The 32-day bound applies to daily Athena log processing;
 the inexpensive SUMO CSV import fills all missing days in one invocation.
 
 The scheduled workflow lives on `master`. Production static files come from
@@ -51,17 +57,37 @@ versioned, and TLS-only. Generated data does not produce Git commits.
 | `scratch/<run>/*` | Isolated raw logs; deleted after use, two-day lifecycle fallback |
 | `query-results/*` | Athena output; 30-day lifecycle |
 
-Snapshots and handoff artifacts have no expiration policy. A failed upload or
-query does not advance `current.json`. A conflicting writer cannot replace a
-pointer it did not read. An interrupted deployment can retry the same snapshot
+Snapshots and handoff artifacts have no expiration policy. Each collection
+component restores the current snapshot into a clean temporary directory and
+commits its valid results independently. Failed observations retain their prior
+values; other days and datasets can advance. A failed snapshot upload or
+validation cannot advance `current.json`, and a conflicting writer cannot
+replace a pointer it did not read. An interrupted deployment can retry the same snapshot
 without repeating Athena. Query scratch uses unique tables in `stats_pipeline`,
 never the legacy tables or the legacy scratch bucket.
 
 New days require all 24 hourly log partitions, nonempty sources, and no objects
 modified within the past 15 minutes. Every run checks source fingerprints for
 the most recent seven days. A change reprocesses that date and recalculates
-affected MAU coverage factors, preserving raw Glean counts. Older corrections
-require an explicit backfill.
+affected MAU coverage factors, preserving raw Glean counts. Failed dates are
+saved in `checkpoints.daily.pending` and retried even after leaving that window.
+Other older corrections require an explicit backfill.
+
+Daily logs, MAU, add-ons, scalar telemetry, platforms, locales and SUMO have
+separate collection jobs. MAU runs after daily processing and uses the latest
+valid ADI observations even when part of that job failed. Daily ATN handoffs do
+not wait for the weekly collectors. Within a component, failed dates/scalars
+do not discard successful ones. Each job uploads `collection-report.json` and
+fails explicitly if an observation failed; publication may still deploy the
+valid partial snapshot. Daily publication runs as soon as the daily collector
+finishes; a second publication picks up the weekly and MAU results. Ordinary
+GitHub failed-run notifications remain the notice mechanism; this is not
+independent freshness monitoring.
+
+Only dependent work is held back: an ADI date requires both ATN version/app
+aggregates and AUS counts; a MAU factor requires its weekday ADI window; an ATN
+import requires all five verified files; indexing and per-date totals require
+that date's committed import. Unrelated failures do not gate these operations.
 
 ## Manual collection and backfills
 
@@ -146,16 +172,37 @@ SSM execution, or inbound access to the instance.
 
 The Python 3 consumer runs in its own container; it uses the existing
 `addons-server` container for Django/database/search operations. Installation
-files are `deploy/atn.Dockerfile`, `deploy/stats-atn.service`, and
-`deploy/stats-atn.timer`. The host keeps acknowledgements in
+files are `deploy/atn.Dockerfile`, `deploy/stats-atn.service`,
+`deploy/stats-atn.timer`, and the `stats-atn-catalog.service`/`.timer` units.
+The host keeps acknowledgements in
 `/home/centos/stats-state/completed.json` and polls every five minutes.
 
-Before touching ATN, it validates checksums and dates for all five files. Files
+Before importing each date, it validates checksums and dates for all five files.
+Malformed TSV rows are skipped with a warning, using the same acceptance rules
+as the producer. An empty file or checksum mismatch rejects that date; later
+dates still run. Files
 are supplied through the existing import command's **file mode**, rather than
 overwriting mutable legacy S3 paths between verification and import. Import is
-wrapped in an InnoDB transaction. Indexing and global totals run synchronously
-using ATN's existing tasks. Average daily users runs after all pending dates.
-Only then are revisions acknowledged atomically.
+wrapped in an InnoDB transaction. Database import, indexing and per-date totals
+are checkpointed separately in `progress`, and a finished date moves to
+`completed`. An indexing failure retries indexing without reimporting the
+database or blocking per-date totals and later imports. Cleanup failures do not
+invalidate a committed import. Both phases run synchronously and report errors.
+
+`average_pending` is persisted as soon as a database import succeeds. The
+average retries even if no new imports arrive. It waits only for database
+imports in the legacy query's current twelve-completed-day window (starting no
+earlier than the October 11 ownership boundary), not for indexing or catalog
+jobs. Older failed dates do not hold back the current average.
+
+Catalog totals have their own local timer at **00:40 UTC**, preserving the old
+schedule. This records the seven yesterday-only counts even when log imports,
+search indexing or telemetry fail. The service uses a separate database lock
+and writes/verifies all 17 catalog totals, attempting later totals after one
+fails. Per-date update-ping totals stay with the consumer. Catalog counts are
+point-in-time measurements: after a missed day they cannot be reconstructed
+accurately from today's catalog. `Persistent=true` catches a missed activation
+on restart, but it cannot recreate multiple missed historical observations.
 
 Repeating an interrupted date replaces its rows rather than adding counts.
 A correction that would remove an existing add-on aborts and rolls back: search
@@ -197,11 +244,14 @@ values already capped by the legacy column were not reconstructed.
 ```bash
 sudo systemctl status stats-atn.timer stats-atn.service
 sudo journalctl -u stats-atn.service --since today
+sudo systemctl status stats-atn-catalog.timer stats-atn-catalog.service
+sudo journalctl -u stats-atn-catalog.service --since today
 ```
 
 Do not run control's importer and this consumer concurrently. Preserve all
-unrelated ATN cron entries. The old 00:20 average/00:40 totals jobs are replaced
-by the ordered consumer work, not duplicated.
+unrelated ATN cron entries. The old 00:20 average job is replaced by the
+import-dependent average; the old 00:40 totals job is replaced by the independent
+catalog timer. Keep those two old cron entries disabled.
 
 ## Provisioning and credentials
 

@@ -10,7 +10,6 @@ import json
 import os
 import statistics
 import tempfile
-import requests
 from pathlib import Path
 
 start_date = datetime.date(2020, 12, 27)
@@ -46,7 +45,7 @@ def query_glean_data():
     url = f"{GLEAN_BASE_URL}/api/queries/{GLEAN_QUERY_ID}/results"
 
     print("Querying Glean API...")
-    response = requests.get(url, headers=headers, timeout=30)
+    response = tools.http_session().get(url, headers=headers, timeout=30)
     response.raise_for_status()
     rows = response.json()['query_result']['data']['rows']
     results = {}
@@ -138,6 +137,74 @@ def percent_represented(end_date, adi_data=None):
     return 1.0
 
 
+def collect(dataloc, adi_data, through=None, *, recalculate=False, add_missing=True,
+            on_error=None):
+    """Update independent weekly points; preserve a failed point's previous value."""
+    glean_data = None
+    glean_error = None
+    recalculated = 0
+    added = 0
+
+    # One data point per week. Build the whole update before replacing the file.
+    date_args = {} if through is None else {'end': through + datetime.timedelta(days=1)}
+    def update_day(daystring):
+        nonlocal glean_data, glean_error, recalculated, added
+        curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
+        if daystring in dataloc:
+            if recalculate and curdate >= glean_cutoff_date:
+                factor = round(percent_represented(curdate, adi_data), 3)
+                if dataloc[daystring]['78'] != factor:
+                    dataloc[daystring]['78'] = factor
+                    recalculated += 1
+            return
+
+        if not add_missing:
+            return
+
+        if curdate >= glean_cutoff_date:
+            if glean_data is None:
+                if glean_error is not None:
+                    raise glean_error
+                try:
+                    glean_data = query_glean_data()
+                except Exception as error:
+                    glean_error = error
+                    raise
+            mau = get_glean_mau(daystring, glean_data)
+            if mau is None:
+                if glean_data and daystring <= max(glean_data):
+                    raise ValueError(f"Missing historical Glean MAU for {daystring}")
+                print(f"  Glean MAU is not available yet for {daystring}; retry next run")
+                return
+            if type(mau) is not int or mau <= 0:
+                raise ValueError(f"Invalid Glean MAU for {daystring}")
+
+            adjustment_factor = percent_represented(curdate, adi_data)
+            d = {
+                "start_date": (curdate - datetime.timedelta(num_days)).strftime("%Y-%m-%d"),
+                "ami": mau,
+                "78": round(adjustment_factor, 3)
+            }
+            print(f"{daystring}: Glean MAU: {mau:,}, Adjustment: {adjustment_factor:.3f}")
+        else:
+            q = tools.TotalUsers(curdate, num_days)
+            d = {
+                "start_date": (curdate - datetime.timedelta(num_days)).strftime("%Y-%m-%d"),
+                "ami": q.query_totalusers().totalusers,
+                "78": round(percent_represented(curdate, adi_data), 3)
+            }
+
+        dataloc[daystring] = d
+        added += 1
+
+    for daystring in tools.date_range(start_date, 7, **date_args):
+        try:
+            update_day(daystring)
+        except Exception as error:
+            tools.record_failure(on_error, daystring, error)
+    return dataloc, recalculated, added
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Update weekly Thunderbird MAU.")
     parser.add_argument(
@@ -168,51 +235,8 @@ def main(argv=None):
                 or not 0 < record['78'] <= 1
                 or not isinstance(record.get('start_date'), str)):
             raise ValueError(f"Invalid cached MAU record for {day}")
-    glean_data = None
-    recalculated = 0
-    added = 0
-
-    # One data point per week. Build the whole update before replacing the file.
-    date_args = {} if args.through is None else {'end': args.through + datetime.timedelta(days=1)}
-    for daystring in tools.date_range(start_date, 7, **date_args):
-        curdate = datetime.datetime.strptime(daystring, "%Y-%m-%d").date()
-        if daystring in dataloc:
-            if args.recalculate and curdate >= glean_cutoff_date:
-                factor = round(percent_represented(curdate, adi_data), 3)
-                if dataloc[daystring]['78'] != factor:
-                    dataloc[daystring]['78'] = factor
-                    recalculated += 1
-            continue
-
-        if curdate >= glean_cutoff_date:
-            if glean_data is None:
-                glean_data = query_glean_data()
-            mau = get_glean_mau(daystring, glean_data)
-            if mau is None:
-                if glean_data and daystring <= max(glean_data):
-                    raise ValueError(f"Missing historical Glean MAU for {daystring}")
-                print(f"  Glean MAU is not available yet for {daystring}; retry next run")
-                continue
-            if type(mau) is not int or mau <= 0:
-                raise ValueError(f"Invalid Glean MAU for {daystring}")
-
-            adjustment_factor = percent_represented(curdate, adi_data)
-            d = {
-                "start_date": (curdate - datetime.timedelta(num_days)).strftime("%Y-%m-%d"),
-                "ami": mau,
-                "78": round(adjustment_factor, 3)
-            }
-            print(f"{daystring}: Glean MAU: {mau:,}, Adjustment: {adjustment_factor:.3f}")
-        else:
-            q = tools.TotalUsers(curdate, num_days)
-            d = {
-                "start_date": (curdate - datetime.timedelta(num_days)).strftime("%Y-%m-%d"),
-                "ami": q.query_totalusers().totalusers,
-                "78": round(percent_represented(curdate, adi_data), 3)
-            }
-
-        dataloc[daystring] = d
-        added += 1
+    dataloc, recalculated, added = collect(
+        dataloc, adi_data, args.through, recalculate=args.recalculate)
 
     if recalculated or added or output != args.input:
         mode = args.input.stat().st_mode & 0o777 if args.input.exists() else 0o644
