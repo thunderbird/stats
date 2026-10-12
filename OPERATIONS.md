@@ -71,6 +71,8 @@ modified within the past 15 minutes. Every run checks source fingerprints for
 the most recent seven days. A change reprocesses that date and recalculates
 affected MAU coverage factors, preserving raw Glean counts. Failed dates are
 saved in `checkpoints.daily.pending` and retried even after leaving that window.
+When the daily limit is reached, recent dates have priority and older retries
+rotate by last-attempt time so repeatedly failing dates cannot starve the rest.
 Other older corrections require an explicit backfill.
 
 Daily logs, MAU, add-ons, scalar telemetry, platforms, locales and SUMO have

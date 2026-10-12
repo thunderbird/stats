@@ -101,9 +101,20 @@ def collect_daily(
         raise ValueError("--max-days must be positive")
     if len(days) > max_days and start:
         raise ValueError(f"{len(days)} dates exceeds --max-days={max_days}")
+    source_state = checkpoints.setdefault("sources", {})
+    if len(days) > max_days:
+        recent = through - dt.timedelta(days=config.late_days - 1)
+        # Always give current data a slot, then rotate older retries. A set
+        # of permanently unavailable old days must not monopolize the limit.
+        days.sort(
+            key=lambda day: (
+                day < recent,
+                source_state.get(str(day), {}).get("last_attempt", "") if day < recent else "",
+                day.toordinal() if day < recent else -day.toordinal(),
+            )
+        )
     deferred = {day.isoformat() for day in days[max_days:]}
     days = days[:max_days]
-    source_state = checkpoints.setdefault("sources", {})
     collected, complete = {}, {}
     for day in days:
         key = day.isoformat()
@@ -129,6 +140,7 @@ def collect_daily(
             pending.discard(key)
             continue
         current = copy.deepcopy(previous)
+        current["last_attempt"] = dt.datetime.now(dt.UTC).isoformat()
         provenance = {kind: value for kind, value in sources.items() if value}
         source_key = f"{config.prefix}/sources/{run_id}/{key}.json"
         if provenance:

@@ -300,3 +300,26 @@ def test_staged_derived_build_preserves_previous_beta_history(collection, monkey
     sources(monkeypatch)
     pipeline.run(config, directory, "code", component="daily")
     assert json.loads((directory / "140beta_nightly_adi.json").read_bytes()) == previous
+
+
+def test_bad_backlog_cannot_starve_current_day_or_other_retries(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    backlog = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"]
+    store.snapshot(
+        directory, "backlog", {"daily": {"pending": backlog}}, "code", store.current()[1]
+    )
+    attempted = []
+
+    def source(s3, kind, day):
+        attempted.append(day)
+        raise RuntimeError("unavailable")
+
+    monkeypatch.setattr(pipeline, "source_manifest", source)
+    all_attempted = set()
+    for _ in range(2):
+        attempted.clear()
+        with pytest.raises(pipeline.CollectionFailed):
+            pipeline.run(config, directory, "code", component="daily", max_days=3)
+        assert "2026-10-11" in attempted
+        all_attempted.update(attempted)
+    assert set(backlog) <= all_attempted
