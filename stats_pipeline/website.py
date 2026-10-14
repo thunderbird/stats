@@ -1,4 +1,5 @@
 """Build and verify a plain static bundle, then purge one fixed hostname."""
+import json
 import os
 from pathlib import Path
 import re
@@ -6,8 +7,30 @@ import shutil
 import time
 
 from .common import atomic_json, digest, http_session
+from .browser_data import prepare
 
 HOSTS = {"production": "stats.thunderbird.net", "staging": "stats-stage.thunderbird.net"}
+
+
+def referenced_json(script):
+    """Literal JSON dependencies shared by the static build and browser fixture."""
+    return re.findall(r'''(?:getJSON|json|fetch)\(\s*['"]([^'"]+\.json)['"]''', script)
+
+
+def verify_data_files(output):
+    output = Path(output)
+    for script in list(output.rglob('*.js')) + list(output.rglob('*.mjs')):
+        for name in referenced_json(script.read_text()):
+            if '://' not in name and not (output/name).is_file():
+                raise ValueError(f'Missing JSON referenced by {script.name}: {name}')
+    index = output / 'data/index.json'
+    if index.exists():
+        manifest = json.loads(index.read_text())
+        names = [part['file'] for part in manifest['adi']['files']]
+        names += [manifest['adi'].get('totals'), manifest.get('glean'), manifest.get('releases')]
+        for name in filter(None, names):
+            if Path(name).name != name or not (index.parent/name).is_file():
+                raise ValueError(f'Missing JSON referenced by data/index.json: {name}')
 
 
 def hostname(environment):
@@ -38,7 +61,12 @@ def build(website, data, output, manifest, revision):
             shutil.copyfile(website/name, output/name)
     for name in manifest["files"]:
         if name not in {"financials.json", "oauth.json"}:
-            shutil.copyfile(data/name, output/name)
+            if name == "glean.json":
+                from .glean import sanitize_public
+                atomic_json(output/name, sanitize_public(json.loads((data/name).read_text())))
+            else:
+                shutil.copyfile(data/name, output/name)
+    prepare(data, output)
     (output/"_headers").write_text("/*\n  Cache-Control: public, max-age=3600\n")
     atomic_json(output/"deployment.json", {"snapshot": manifest["run_id"], "website_revision": revision})
     files = [p for p in output.rglob('*') if p.is_file()]
@@ -46,10 +74,7 @@ def build(website, data, output, manifest, revision):
         raise ValueError("Static asset limit exceeded")
     if not (output/"index.html").is_file():
         raise ValueError("Missing index.html")
-    for script in output.rglob('*.js'):
-        for name in re.findall(r'''getJSON\(['"]([^'"]+\.json)['"]''', script.read_text()):
-            if '://' not in name and not (output/name).is_file():
-                raise ValueError(f'Missing JSON referenced by {script.name}: {name}')
+    verify_data_files(output)
     return {str(p.relative_to(output)): digest(p.read_bytes()) for p in files if p.name != '_headers'}
 
 

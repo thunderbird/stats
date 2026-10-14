@@ -517,3 +517,26 @@ def test_uncommitted_run_reports_its_own_warnings(collection, monkeypatch, failu
     with pytest.raises(pipeline.CollectionFailed):
         pipeline.run(config, directory, "code", component="daily", report=report)
     assert json.loads(report.read_bytes())["warnings"] == [current]
+
+
+def test_matching_source_fingerprints_still_upgrade_missing_channels(collection, monkeypatch):
+    config, store, directory, baseline, original = collection
+    sources(monkeypatch)
+    collect = pipeline.collect_source
+    calls = []
+
+    def tracking(*args, **kwargs):
+        calls.append(args[4])
+        return collect(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "collect_source", tracking)
+    day = "2026-10-09"
+    checkpoints = {"sources": {day: {
+        "fingerprints": {"atn": f"atn-{day}", "aus": f"aus-{day}"},
+        "atn_fingerprint": f"atn-{day}", "artifacts": {"app": {}},
+    }}}
+    session = Mock()
+    session.client.return_value = store.s3
+    pipeline.collect_daily(config, directory, baseline, checkpoints, store, session,
+                           "channel-migration", dt.date(2026, 10, 9), None, 32, Failures())
+    assert calls == ["atn", "aus"]

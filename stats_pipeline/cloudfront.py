@@ -9,6 +9,7 @@ from . import aus_sql, cloudfront_sql
 from .athena import Athena
 from .artifacts import GROUPS, clean_rows, tsv
 from .common import digest, json_bytes
+from .channels import UNKNOWN, add_channel, aus_record, coverage
 
 SOURCES = {
     "atn": ("versioncheck-logs", "E1PQMC7BGJOP5E"),
@@ -91,16 +92,10 @@ def collect_source(s3, athena_client, config, day, kind, source, run_id, failure
                 if rows is not None:
                     artifact_rows[group] = rows
         else:
-            rows = athena.rows(sql.count_query(table))
+            rows = athena.rows(sql.channel_query(table))
             # AUS aggregates go straight to JSON. A mismatched date or count
             # invalidates this day's total; TSV field filtering does not apply.
-            if not rows or any(len(row) != 3 or row[0] != day or int(row[2]) < 0 for row in rows):
-                raise ValueError(f"Invalid AUS aggregate for {day}")
-            # Match the legacy transform exactly, including repeated version rows.
-            return {
-                "count": sum(int(row[2]) for row in rows),
-                "versions": {row[1]: int(row[2]) for row in rows},
-            }
+            return aus_record(rows, day)
     finally:
         # Only resources this invocation created. Never delete the legacy scratch bucket.
         if created_view:
@@ -141,11 +136,24 @@ SEAMONKEY = "{92650c4d-4b8e-4d2a-b7eb-24ecf4f6b63a}"
 
 
 def adi_record(rows, aus, seamonkeys):
-    versions, total = {}, 0
+    versions, atn_versions, total = {}, {}, 0
     for row in rows:
         if row[1] == THEME and row[2] not in seamonkeys:
             versions[row[2]] = versions.get(row[2], 0) + int(row[3])
+            atn_versions[row[2]] = atn_versions.get(row[2], 0) + int(row[3])
             total += int(row[3])
     # Preserve the existing overlap/total behavior; migration does not change metrics.
     versions.update(aus["versions"])
-    return {"count": total + aus["count"], "versions": versions}
+    record = {"count": total + aus["count"], "versions": versions}
+    if "channels" in aus:
+        channels = {}
+        for channel, counts in aus["channels"].items():
+            for version, count in counts.items():
+                add_channel(channels, channel, version, count)
+        # Thunderbird's extensions.update.url sends no channel parameter. These
+        # ATN observations are part of ADI and remain explicitly unclassified.
+        for version, count in atn_versions.items():
+            add_channel(channels, UNKNOWN, version, count)
+        record["channels"] = channels
+        record["channel_coverage"] = coverage(channels, record["count"])
+    return record

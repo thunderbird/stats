@@ -3,7 +3,9 @@ import datetime as dt
 import json
 import logging
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 
 import boto3
 
@@ -41,6 +43,8 @@ def main(argv=None):
     build_cmd.add_argument("--output", type=Path, required=True)
     build_cmd.add_argument("--manifest", type=Path, required=True)
     build_cmd.add_argument("--revision", required=True)
+    build_cmd.add_argument("--supplemental-data", type=Path,
+                           help="Reviewed preview data layered over the restored snapshot")
     for name in ("finish-deploy", "verify"):
         command = sub.add_parser(name)
         command.add_argument("--environment", choices=["production", "staging"], required=True)
@@ -56,7 +60,25 @@ def main(argv=None):
         print(json.dumps(validate(args.data), indent=2))
         return
     if args.command == "build":
-        build(args.website, args.data, args.output, json.loads(args.manifest.read_bytes()), args.revision)
+        manifest = json.loads(args.manifest.read_bytes())
+        if args.supplemental_data:
+            from .preview import prepare_preview_data
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix="staging-data-", dir=args.output.parent) as temp:
+                temp = Path(temp)
+                supplements = temp / "supplements"
+                shutil.copytree(args.supplemental_data, supplements)
+                # The live snapshot owns the date coverage and daily totals.
+                shutil.copyfile(args.data / "thunderbird_adi.json",
+                                supplements / "thunderbird_adi.json")
+                prepared = temp / "data"
+                prepared.mkdir()
+                prepare_preview_data(args.data, supplements, prepared)
+                prepared_manifest = {"run_id": manifest["run_id"], "files": {
+                    path.name: {} for path in prepared.glob("*.json")}}
+                build(args.website, prepared, args.output, prepared_manifest, args.revision)
+        else:
+            build(args.website, args.data, args.output, manifest, args.revision)
         return
     if args.command == "verify":
         verify(args.environment, args.output, base_url=args.base_url)

@@ -55,9 +55,15 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: uv run --frozen --no-dev tb-stats restore --data .state --manifest .snapshot.json
       - name: Build static files
+        env:
+          TARGET: ${{ inputs.environment }}
         run: |
           revision=$(git -C website rev-parse HEAD)
-          uv run --frozen --no-dev tb-stats build --website website/docs --data .state --output dist --manifest .snapshot.json --revision "$revision"
+          supplements=()
+          if [ "$TARGET" = staging ] && [ -d website/staging-data ]; then
+            supplements=(--supplemental-data website/staging-data)
+          fi
+          uv run --frozen --no-dev tb-stats build --website website/docs --data .state --output dist --manifest .snapshot.json --revision "$revision" "${supplements[@]}"
       - name: Deploy files
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

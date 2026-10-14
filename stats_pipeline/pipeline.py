@@ -9,7 +9,7 @@ import boto3
 from botocore.config import Config as BotoConfig
 
 from tools import globaladdons, monthlyusers, platlang, scalars, settings
-from . import sumo
+from . import sumo, glean, releases
 from .adi import build_derived
 from .artifacts import GROUPS
 from .cloudfront import SEAMONKEY, THEME, adi_record, collect_source, source_manifest
@@ -17,7 +17,7 @@ from .common import Failures, atomic_json, atomic_write, dates, json_bytes, utc_
 from .state import Store
 from .validation import check_freshness, merge_records, read_data, validate, validate_record
 
-COMPONENTS = ("daily", "mau", "addons", "scalars", "platforms", "locales", "sumo")
+COMPONENTS = ("daily", "mau", "addons", "scalars", "platforms", "locales", "glean", "sumo")
 WEEKLY = {
     "addons": ("addon_stats.json", globaladdons.collect),
     "scalars": ("telemetry.json", scalars.collect),
@@ -127,6 +127,7 @@ def collect_daily(
         force = start is not None or previous.get("forced", False)
         needs_adi = (
             key not in adi
+            or "channels" not in adi[key]
             or len(fingerprints) != 2
             or previous.get("fingerprints") != fingerprints
             or force
@@ -306,6 +307,20 @@ def _collect_component(
             max_days,
             failures,
         )
+    elif component == "glean":
+        release_data = failures.attempt(
+            "release-history", releases.collect, baseline.get("release_history.json")
+        )
+        if release_data is not None:
+            atomic_json(directory / "release_history.json", release_data)
+        result = failures.attempt(
+            "glean", glean.collect, baseline.get("glean.json"), through,
+            start=start, refresh_week=refresh_week,
+            on_error=lambda day, error: failures.record(f"glean/{day}", error),
+        )
+        if result is not None:
+            atomic_json(directory / "glean.json", result)
+            failures.attempt("glean/freshness", glean.check_freshness, result, through)
     elif component == "sumo":
         details["source"] = {}
         result = failures.attempt(

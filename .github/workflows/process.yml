@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component: [addons, scalars, platforms, locales]
+        component: [addons, scalars, platforms, locales, glean]
     uses: ./.github/workflows/collect-component.yml
     with:
       component: ${{ matrix.component }}

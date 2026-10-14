@@ -45,6 +45,19 @@ def validate_record(name, day, record):
             raise ValueError(f"Empty ADI: {day}")
         if name == "thunderbird_adi.json" and sum(record["versions"].values()) > record["count"]:
             raise ValueError(f"Inconsistent ADI: {day}")
+        if name == "thunderbird_adi.json" and "channels" in record:
+            from .channels import CHANNELS, UNKNOWN, coverage
+            channels = record["channels"]
+            if not isinstance(channels, dict) or set(channels) - {*CHANNELS, UNKNOWN}:
+                raise ValueError(f"Invalid ADI channels: {day}")
+            for channel, versions in channels.items():
+                if not isinstance(versions, dict) or any(
+                        not isinstance(version, str) or not nonnegative(count)
+                        for version, count in versions.items()):
+                    raise ValueError(f"Invalid ADI channel counts: {day}/{channel}")
+            expected = coverage(channels, record["count"])
+            if record.get("channel_coverage") != expected:
+                raise ValueError(f"Inconsistent ADI channel coverage: {day}")
 
 
 def merge_records(name, baseline, candidate, on_error):
@@ -86,5 +99,18 @@ def validate(directory, baseline=None):
     for scalar, records in data["telemetry.json"].items():
         for day, record in records.items():
             validate_record(scalar, day, record)
+    if "glean.json" in data:
+        from .glean import validate as validate_glean
+        validate_glean(data["glean.json"])
+        if baseline and "glean.json" in baseline:
+            previous, current = baseline["glean.json"], data["glean.json"]
+            for section in ("platforms", "locales", "addons"):
+                if previous[section]["records"].keys() - current[section]["records"].keys():
+                    raise ValueError(f"Historical Glean {section} removed")
+            for metric, values in previous["metrics"].items():
+                if metric not in current["metrics"]:
+                    raise ValueError(f"Historical Glean metric removed: {metric}")
+                if values["records"].keys() - current["metrics"][metric]["records"].keys():
+                    raise ValueError(f"Historical Glean metric removed: {metric}")
     return {name: {"records": len(records), "latest": max(records) if records else None}
             for name, records in data.items() if name in REQUIRED - {"telemetry.json"}}

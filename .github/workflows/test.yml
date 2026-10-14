@@ -18,3 +18,10 @@ jobs:
       - run: uv sync --frozen
       - run: uv run pytest -q
       - run: uv run ruff check stats_pipeline tests deploy tools/monthlyusers.py tools/tools.py tools/globaladdons.py tools/scalars.py tools/platlang.py tools/sumo.py
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run test:unit
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:browser

@@ -1,8 +1,17 @@
 {
   "name": "thunderbird-stats-deploy",
   "private": true,
-  "description": "CLI dependency for deploying plain static files only",
+  "description": "Static Thunderbird statistics site and local validation tooling",
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "1.58.2",
+    "d3": "7.9.0",
     "wrangler": "4.149.0"
+  },
+  "scripts": {
+    "test:unit": "node --test tests/js/*.test.mjs",
+    "test:browser": "playwright test",
+    "preview": "python3 -m http.server 8877 --bind 127.0.0.1 --directory build/preview",
+    "build:preview": ".venv/bin/python -m stats_pipeline.preview"
   }
 }

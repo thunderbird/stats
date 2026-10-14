@@ -3,6 +3,15 @@ count_query_string = """SELECT date, split_part(cs_uri, '/', 5) AS version, coun
 WHERE cs_uri LIKE '%update%' GROUP BY 1, 2
 """
 
+# Keep precisely the legacy request population. Unrecognized URL layouts still
+# contribute to the ADI total but do not receive an inferred channel.
+channel_query_string = """SELECT date, split_part(cs_uri, '/', 5) AS version,
+CASE WHEN regexp_like(cs_uri, '^/update/[0-9]+/[^/]+/[^/]+/[^/]+/[^/]+/[^/]+/[^/]+/')
+THEN split_part(cs_uri, '/', 9) ELSE '' END AS channel,
+count(split_part(cs_uri, '/', 5)) AS versiontotal FROM {0}
+WHERE cs_uri LIKE '%update%' GROUP BY 1, 2, 3
+"""
+
 # 0 = locale,os,version,status, 1 = table name, 2 = day formatted as 2018-07-20
 buildtarget_query_string = """SELECT date, split_part(cs_uri, '/', 7) AS version, count(split_part(cs_uri, '/', 7)) AS versiontotal FROM {0}
 WHERE cs_uri LIKE '%update%' AND split_part(cs_uri, '/', 10) LIKE '%%Linux%%' GROUP BY 1, 2
@@ -54,11 +63,14 @@ def count_query(table):
     return count_query_string.format(table)
 
 
+def channel_query(table):
+    return channel_query_string.format(table)
+
+
 def buildtarget_query(table):
     return buildtarget_query_string.format(table)
 
 
 def drop_table(table):
     return drop_table_q.format(table)
-
 
