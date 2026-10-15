@@ -158,9 +158,10 @@ WHERE table_name IN ('baseline', 'metrics', 'addons', 'events')
 ORDER BY table_name, field_path"""
 
 
-def baseline_query(day):
-    return rf"""WITH clients AS (
-  SELECT client_info.client_id AS client_id,
+def baseline_query(day, *, source="baseline"):
+    bounds(day)
+    if source == "baseline":
+        clients = rf"""  SELECT client_info.client_id AS client_id,
     COALESCE(NULLIF(client_info.os, ''), 'Unknown') AS platform,
     REGEXP_EXTRACT(client_info.os_version, r'^([0-9]+(?:\.[0-9]+){{0,3}})') AS os_version,
     SAFE_CAST(client_info.windows_build_number AS INT64) AS windows_build_number,
@@ -171,9 +172,31 @@ def baseline_query(day):
   WHERE {predicate(day)}
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY client_info.client_id ORDER BY submission_timestamp DESC, document_id DESC
-  ) = 1
+  ) = 1"""
+    elif source == "baseline_clients_last_seen":
+        # Each row carries the daily modes from the client's most recent
+        # reporting day. The seven-day mask limits this snapshot to the same
+        # Monday-Sunday reporting population as the raw baseline query.
+        clients = rf"""  SELECT
+    CASE normalized_os WHEN 'Mac' THEN 'Darwin'
+      ELSE COALESCE(NULLIF(normalized_os, ''), 'Unknown') END AS platform,
+    REGEXP_EXTRACT(normalized_os_version, r'^([0-9]+(?:\.[0-9]+){{0,3}})') AS os_version,
+    SAFE_CAST(windows_build_number AS INT64) AS windows_build_number,
+    COALESCE(NULLIF(locale, ''), 'Unknown') AS locale,
+    COALESCE(NULLIF(app_channel, ''), 'Unknown') AS channel,
+    COALESCE(NULLIF(app_display_version, ''), 'Unknown') AS version
+  FROM `{DATASET}.baseline_clients_last_seen`
+  WHERE submission_date = DATE('{day}')
+    AND days_since_seen < 7
+    AND NULLIF(client_id, '') IS NOT NULL"""
+    else:
+        raise ValueError("Unknown Glean baseline source")
+    return rf"""WITH clients AS (
+{clients}
 ), classified AS (
-  SELECT * EXCEPT(platform),
+  SELECT * EXCEPT(platform, channel),
+    CASE WHEN LOWER(TRIM(channel)) IN ('esr', 'release', 'beta', 'nightly')
+      THEN LOWER(TRIM(channel)) ELSE 'other' END AS channel,
     CASE WHEN platform IN ('Windows', 'Windows_NT', 'WINNT') THEN
       CASE WHEN REGEXP_EXTRACT(os_version, r'^[0-9]+\.[0-9]+') = '10.0' THEN
         CASE WHEN windows_build_number >= 22000 THEN 'Windows 11'
@@ -186,19 +209,23 @@ def baseline_query(day):
     ELSE CONCAT(platform, ' ', COALESCE(os_version, 'Unknown')) END AS platform
   FROM clients
 )
-SELECT CASE WHEN GROUPING(platform) = 0 THEN 'platforms'
-            WHEN GROUPING(locale) = 0 THEN 'locales'
-            WHEN GROUPING(channel) = 0 THEN 'channels'
-            WHEN GROUPING(version) = 0 THEN 'versions'
+SELECT CASE WHEN GROUPING(c.channel) = 0 AND GROUPING(c.platform) = 0 THEN 'channel_platforms'
+            WHEN GROUPING(c.channel) = 0 AND GROUPING(c.locale) = 0 THEN 'channel_locales'
+            WHEN GROUPING(c.platform) = 0 THEN 'platforms'
+            WHEN GROUPING(c.locale) = 0 THEN 'locales'
+            WHEN GROUPING(c.channel) = 0 THEN 'channels'
+            WHEN GROUPING(c.version) = 0 THEN 'versions'
             ELSE 'total' END AS section,
-  CASE WHEN GROUPING(platform) = 0 THEN platform
-       WHEN GROUPING(locale) = 0 THEN locale
-       WHEN GROUPING(channel) = 0 THEN channel
-       WHEN GROUPING(version) = 0 THEN version
+  CASE WHEN GROUPING(c.platform) = 0 THEN c.platform
+       WHEN GROUPING(c.locale) = 0 THEN c.locale
+       WHEN GROUPING(c.channel) = 0 THEN c.channel
+       WHEN GROUPING(c.version) = 0 THEN c.version
        ELSE '' END AS key,
+  IF(GROUPING(c.channel) = 0, c.channel, '') AS channel,
   COUNT(*) AS count
-FROM classified
-GROUP BY GROUPING SETS ((), (platform), (locale), (channel), (version))"""
+FROM classified AS c
+GROUP BY GROUPING SETS ((), (c.platform), (c.locale), (c.channel), (c.version),
+                        (c.channel, c.platform), (c.channel, c.locale))"""
 
 
 def metric_query(day, metric_ids=None):

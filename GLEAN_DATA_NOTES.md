@@ -1,7 +1,7 @@
 # Glean data contract
 
 `stats_pipeline.glean.collect(existing, through, start=None, refresh_week=None,
-on_error=None, max_weeks=8)` builds `glean.json`. `empty_data()`, `validate(data)`,
+on_error=None, max_weeks=8, baseline_source="baseline")` builds `glean.json`. `empty_data()`, `validate(data)`,
 `sanitize_public(data)`, and `check_freshness(data, through)` support snapshot integration. Collection is
 read-only and uses STMO's `Telemetry (BigQuery)` data source, discovered by name.
 Set `GLEAN_API_KEY`; `GLEAN_KEY` is accepted for local development. Keys remain in
@@ -162,11 +162,67 @@ Linux labels identify reported kernel versions, not Linux distributions.
 Numeric OS versions are normalized before grouping; existing publication
 thresholds and explicit unknown categories still apply.
 
-Successful baseline coverage records `platform_detail: 1`. Cached family-only
-weeks are marked `pending_platform_detail` and re-queried as independent baseline
-transactions, within the existing newest-first week limit. Failures preserve
-prior counts and the retry marker; unrelated metric, OAuth, and add-on sections
-are retained. Freshness rejects a pending detail refresh in the latest week.
+Successful baseline coverage records `platform_detail: 2`. Each platform and
+locale record also retains `by_channel`, containing the reporting population
+and category counts for ESR, Release, Beta, Nightly, and other observed channels.
+These distributions come from the same latest baseline ping per client used
+for the overall record. A client is counted once in each distribution.
+The query validates channel/category combinations against both the overall
+category counts and the channel populations before publication suppression.
+The 100-client label threshold applies separately within each channel; overall
+categories remain independent because a category may pass the overall threshold
+without passing it in an individual channel.
+
+The platform and language charts apply the shared channel selection to these
+joint distributions, including percentages, data tables, and CSV exports.
+Selecting every channel restores the independently published overall marginal;
+it does not reconstruct it from suppressed channel labels. Missing joint data
+remains a gap. An observed week with no clients in a selected channel has a
+genuine zero population.
+
+Cached weeks without OS detail or channel distributions are marked
+`pending_platform_detail` and re-queried as independent baseline transactions,
+within the existing newest-first week limit. Failures preserve prior counts and
+the retry marker; unrelated metric, OAuth, and add-on sections are retained.
+Freshness rejects a pending detail refresh in the latest week.
+
+## Historical source availability
+
+The October 15, 2026 source audit found a 420-day partition retention policy on
+raw baseline, metrics, and events tables. Their earliest surviving submission
+date was August 21, 2025. The first fully retained Monday–Sunday week therefore
+ends **August 31, 2025**. The add-ons source was created December 2, 2025, making
+**December 14, 2025** its first complete week. Partially retained first weeks are
+not published as full weekly observations.
+
+The backfill records earlier metric, OAuth, and add-on sections as
+`status: "unavailable"`, with the audited reason and first complete week in
+coverage metadata. They have no numeric record. This differs from `unobserved`,
+which means an available source was queried successfully but did not contain
+that observation. Unavailable sections cannot contain data records and do not
+reopen when the metric-definition audit runs. The dashboard retains their dates
+as gaps and explains the missing source history.
+
+Platform and locale history can be recovered from
+`thunderbird_desktop.baseline_clients_last_seen`, whose derived tables retain
+775 days. With `baseline_source="baseline_clients_last_seen"`, the collector
+uses each Sunday's snapshot and `days_since_seen < 7`. Each client contributes
+its most recent reporting day's **daily modal dimensions**. This is a different
+dimension-selection method from the latest raw ping; every recovered record
+retains explicit source/method provenance. Its platform, locale, channel, and
+version counts and joint distributions still describe the same weekly reporting
+population. Historical `Mac` labels normalize to `Darwin` to use the same chart
+labels and grouping. Missing Windows build numbers remain an unsplit
+Windows 10 / 11 category.
+
+The daily-mode method is defined by Mozilla's
+[baseline clients daily generator](https://github.com/mozilla/bigquery-etl/blob/main/sql_generators/glean_usage/templates/baseline_clients_daily_v1.query.sql)
+and [last-seen generator](https://github.com/mozilla/bigquery-etl/blob/main/sql_generators/glean_usage/templates/baseline_clients_last_seen_v1.query.sql).
+The older metrics-client table preserves activity counts but no feature-probe
+values, and the derived event stream has the same retention as raw events.
+Neither can reconstruct expired feature or OAuth measurements. Existing
+legacy archives remain separate; their populations are not substituted into
+Glean gaps.
 
 ## Add-ons
 

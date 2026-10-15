@@ -13,7 +13,7 @@ import { renderChart, movingAverage, normalizeOverview, presetDateRange, formatP
 
 import {renderBreakdown} from "./breakdown.mjs";
 import {renderFunding} from "./funding-view.mjs";
-import {formatPlatformLabel, groupPlatformRecords} from "./platform-model.mjs";
+import {formatPlatformLabel, groupPlatformRecords, selectChannelRecords} from "./platform-model.mjs";
 import {groupSmallSeries, SMALL_SERIES_LABEL, SMALL_SERIES_HELP} from "./series-grouping.mjs";
 import {trackFocusInput} from "./focus.mjs";
 
@@ -376,6 +376,33 @@ async function copyViewLink(url, message) {
     toast("This view is saved in the address bar. Copy its URL to share.");
   }
 }
+function syncReportChannels() {
+  const supportsChannels = !["financials", "support"].includes(activeTab);
+  const noChannels = state.channels.length === 0;
+  $("#report-channels").hidden = !supportsChannels;
+  $("#secondary-content").hidden = supportsChannels && noChannels;
+  $("#channel-empty-state").hidden = !supportsChannels || !noChannels;
+  const allSelected = CHANNELS.every(channel => state.channels.includes(channel));
+  $("#all-report-channels").setAttribute("aria-pressed", String(allSelected));
+  $("#no-report-channels").setAttribute("aria-pressed", String(noChannels));
+  $$(".channel-set input").forEach(input => {
+    input.checked = state.channels.includes(input.value);
+  });
+  const status = noChannels
+    ? "No channels selected. Choose a channel or All channels to restore the chart."
+    : "Choose one or more channels. Double click to isolate one channel by itself.";
+  const message = $("#channel-filter-status");
+  if (message.textContent !== status) message.textContent = status;
+}
+function setReportChannels(channels) {
+  state.channels = channels;
+  syncReportChannels();
+  if (activeTab === "explore") refreshExplorer();
+  else {
+    if (channels.length) secondaryCharts.forEach(chart => chart.refreshChannels?.());
+    save();
+  }
+}
 function syncControls() {
   $("#grouping").value = state.grouping;
   $("#legend-small-versions-control").hidden = !["major", "versions"].includes(state.grouping);
@@ -394,9 +421,7 @@ function syncControls() {
     b.classList.toggle("selected", b.dataset.mode === state.mode);
     b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   });
-  $$(".channel-set input").forEach(
-    (i) => (i.checked = state.channels.includes(i.value)),
-  );
+  syncReportChannels();
   $("#start-date").value = state.startDate;
   $("#end-date").value = state.endDate;
   $$("#explore-view [data-range]").forEach((b) => {
@@ -531,6 +556,7 @@ async function refreshExplorer() {
       mode: state.mode,
       height: 365,
       title: "Thunderbird version adoption",
+      emptyMessage: state.channels.length ? "No observations for this selection" : "No channels selected",
       unit: "installations",
       yLabel: state.mode === "percent" ? "Share of selected installations (%)" : "Active daily installations",
       totalLabel: "Selected population",
@@ -983,7 +1009,14 @@ function card(id, title, description, series, options = {}) {
     rangeError.hidden=true;selectedRange=next;secondaryRanges.set(rangeKey,next);syncRange();renderPlot();
   }
   syncRange();renderPlot();
-  secondaryCharts.push({destroy:()=>controller?.destroy()});
+  secondaryCharts.push({
+    destroy:()=>controller?.destroy(),
+    ...(options.channelSensitive ? {refreshChannels:()=>{
+      sourceSeries=options.seriesForControls(controlValues);
+      preparedKey=null;
+      renderPlot();
+    }} : {}),
+  });
   rangeControls?.querySelectorAll('[data-card-range]').forEach(button=>button.addEventListener('click',()=>changeRange(presetDateRange(button.dataset.cardRange,first,last))));
   rangeControls?.querySelectorAll('input[type="date"],select').forEach(input=>input.addEventListener('change',()=>{
     const [start,end]=rangeControls.querySelectorAll(monthComparison?'select':'input[type="date"]');changeRange({range:'custom',startDate:start.value,endDate:end.value});
@@ -1130,9 +1163,25 @@ async function showSecondary(tab, link = null) {
     if (glean && !historical) {
       const firstWeek = weeks[0], requestedStart = glean.coverage?.start;
       const pending = glean.coverage?.pending || [];
+      const relevantSections = tab === "platforms" ? ["baseline"]
+        : tab === "telemetry" ? (oauthView ? ["metrics", "oauth"] : ["metrics"]) : ["addons"];
+      const unavailable = weeks.filter(week => relevantSections.some(section =>
+        glean.coverage.weeks[week][section]?.status === "unavailable"));
+      const recovered = tab === "platforms" ? weeks.filter(week =>
+        glean.coverage.weeks[week].baseline?.source === "baseline_clients_last_seen") : [];
+      const explanations = [];
+      if (unavailable.length) explanations.push(
+        `Glean source data is unavailable for ${unavailable.length} week${unavailable.length === 1 ? "" : "s"} ending ${dateLabel(unavailable[0])}–${dateLabel(unavailable.at(-1))}. Missing values are gaps, not zero activity.`,
+      );
+      if (recovered.length) explanations.push(
+        `Weeks ending ${dateLabel(recovered[0])}–${dateLabel(recovered.at(-1))} use archived Glean daily summaries, with each client's latest daily modal dimensions. Later weeks use the latest ping. Older Windows versions may combine Windows 10 and 11 where build numbers were unavailable.`,
+      );
       if ((requestedStart && firstWeek && requestedStart < firstWeek) || pending.length) {
+        explanations.push(`${requestedStart && firstWeek && requestedStart < firstWeek ? `Published Glean week endings begin ${dateLabel(firstWeek)}. Earlier requested weeks since ${dateLabel(requestedStart)} are not available in this snapshot; the gap is not zero activity. ` : ""}${pending.length ? `${pending.length} requested week${pending.length === 1 ? " is" : "s are"} still pending collection.` : ""}`);
+      }
+      if (explanations.length) {
         const coverage = document.createElement("p"); coverage.className = "coverage-note"; coverage.setAttribute("role", "note");
-        coverage.textContent = `${requestedStart && firstWeek && requestedStart < firstWeek ? `Published Glean week endings begin ${dateLabel(firstWeek)}. Earlier requested weeks since ${dateLabel(requestedStart)} are not available in this snapshot; the gap is not zero activity. ` : ""}${pending.length ? `${pending.length} requested week${pending.length === 1 ? " is" : "s are"} still pending collection.` : ""}`;
+        coverage.textContent = explanations.join(" ");
         $("#secondary-content").append(coverage);
       }
     }
@@ -1558,8 +1607,18 @@ function dimensionCard(id, title, dimension, historical = false, bounds = [], pl
     a.localeCompare(b),
   );
   const buildDimensionSeries = controls => {
-    const grouped = platforms ? groupPlatformRecords(records, controls) : records;
-    const definitions = rankedDefinitions(grouped).map(definition => ({...definition, name: platforms ? formatPlatformLabel(definition.name) : definition.name}));
+    const selected = historical ? records : selectChannelRecords(records, state.channels);
+    const grouped = platforms ? groupPlatformRecords(selected, controls) : selected;
+    const all = platforms ? groupPlatformRecords(records, controls) : records;
+    // Keep the complete category set so filtering cannot remove an axis, date
+    // range or hidden-series preference when a selected channel has no data.
+    const definitions = rankedDefinitions([...all, ...grouped]).map(definition => ({
+      ...definition,
+      name: platforms ? formatPlatformLabel(definition.name) : definition.name,
+      note: record => record.channelUnavailable
+        ? "Channel breakdown unavailable for this observation. Select all channels to view the total."
+        : definition.note(record),
+    }));
     return basicSeries(grouped, definitions, 7, bounds);
   };
   card(
@@ -1571,12 +1630,13 @@ function dimensionCard(id, title, dimension, historical = false, bounds = [], pl
     platforms ? [] : buildDimensionSeries(),
     {
       mode: "percent", breakdown: true, unit: "reporting clients", totalLabel: "Reporting clients",
+      seriesForControls: buildDimensionSeries,
+      channelSensitive: !historical,
       ...(platforms ? {
         seriesControls: [
           {id: "darwin", label: "Combine macOS versions", checked: true},
           {id: "linux", label: "Combine Linux versions", checked: true},
         ],
-        seriesForControls: buildDimensionSeries,
       } : {}),
       meta:
         dimension.description ||
@@ -1637,6 +1697,7 @@ async function route(event) {
   $("#site-nav-toggle").setAttribute("aria-expanded", "false");
   $("#explore-view").hidden = activeTab !== "explore";
   $("#secondary-view").hidden = activeTab === "explore";
+  syncReportChannels();
   updatePageTitle();
   if (activeTab === "explore") await refreshExplorer();
   else await showSecondary(activeTab, activeTab === "telemetry" ? telemetryLinkFromHash() : null);
@@ -1863,10 +1924,23 @@ async function init() {
   });
   $$(".channel-set input").forEach((i) =>
     i.addEventListener("change", () => {
-      state.channels = $$(".channel-set input:checked").map((i) => i.value);
-      refreshExplorer();
+      setReportChannels($$(".channel-set input:checked").map((input) => input.value));
     }),
   );
+  $(".channel-set").addEventListener("click", event => {
+    // Native checkbox activation can emit a second click without a dblclick
+    // event. Synchronize selection before its ensuing input/change events.
+    if (event.target.matches("input") && event.detail === 2)
+      setReportChannels([event.target.value]);
+  });
+  $(".channel-set").addEventListener("dblclick", event => {
+    const input = event.target.closest("label")?.querySelector("input");
+    if (!input) return;
+    event.preventDefault();
+    setReportChannels([input.value]);
+  });
+  $("#all-report-channels").addEventListener("click", () => setReportChannels([...CHANNELS]));
+  $("#no-report-channels").addEventListener("click", () => setReportChannels([]));
   for (const sel of ["#start-date", "#end-date"])
     $(sel).addEventListener("change", () => {
       if (!isDay($("#start-date").value) || !isDay($("#end-date").value))
@@ -1989,8 +2063,7 @@ async function init() {
     state.startDate = manifest.adi.channel_start; state.endDate = manifest.adi.channel_end; state.range = "custom"; refreshExplorer();
   });
   $("#include-all-channels").addEventListener("click", () => {
-    state.channels = [...CHANNELS];
-    refreshExplorer();
+    setReportChannels([...CHANNELS]);
   });
   $("#export-csv").addEventListener("click", exportCSV);
   $("#export-svg").addEventListener("click", () => {

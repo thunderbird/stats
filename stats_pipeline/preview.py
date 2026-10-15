@@ -37,7 +37,8 @@ def prepare_preview_data(website, state, data):
     website, state, data = Path(website), Path(state), Path(data)
     for path in website.glob("*.json"):
         shutil.copyfile(path, data / path.name)
-    for name in ("glean.json", "release_history.json", "thunderbird_adi.json"):
+    for name in ("glean.json", "release_history.json", "thunderbird_adi.json",
+                 "thunderbird_ami.json"):
         local = state / name
         if local.exists():
             shutil.copyfile(local, data / name)

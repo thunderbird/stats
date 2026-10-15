@@ -23,6 +23,10 @@ def test_preview_reuses_current_snapshot_and_retains_channel_observations(tmp_pa
     write_json(state / "adi-channels-preview.json", {"2026-10-11": enriched})
     write_json(state / "glean.json", {"schema": 1})
     write_json(state / "release_history.json", {"releases": []})
+    write_json(website / "thunderbird_ami.json", {"2026-10-04": {"ami": 100}})
+    write_json(state / "thunderbird_ami.json", {
+        "2026-10-04": {"ami": 100}, "2026-10-11": {"ami": 110},
+    })
     before = {path: path.read_bytes() for folder in (website, state) for path in folder.iterdir()}
 
     prepare_preview_data(website, state, output)
@@ -37,6 +41,8 @@ def test_preview_reuses_current_snapshot_and_retains_channel_observations(tmp_pa
     assert (output / "glean.json").read_bytes() == (state / "glean.json").read_bytes()
     assert (output / "release_history.json").read_bytes() == (
         state / "release_history.json").read_bytes()
+    assert (output / "thunderbird_ami.json").read_bytes() == (
+        state / "thunderbird_ami.json").read_bytes()
     assert all(path.read_bytes() == body for path, body in before.items())
 
 

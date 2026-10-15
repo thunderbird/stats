@@ -123,6 +123,22 @@
           <span class="stat-caption">Compare ESR, Release, Beta and Nightly</span>
         </div>
       </section>
+      <section id="report-channels" class="channel-filter" aria-labelledby="channel-filter-title">
+        <div class="channel-filter-controls">
+          <h2 id="channel-filter-title">Channels</h2>
+          <fieldset class="channel-set" aria-describedby="channel-filter-status">
+            <legend class="sr-only">Included channels</legend>
+            <button id="all-report-channels" type="button" class="button" aria-pressed="true">All channels</button>
+            <label><input type="checkbox" value="esr" checked /><span class="channel-dot esr" aria-hidden="true"></span>ESR</label>
+            <label><input type="checkbox" value="release" checked /><span class="channel-dot release" aria-hidden="true"></span>Release</label>
+            <label><input type="checkbox" value="beta" checked /><span class="channel-dot beta" aria-hidden="true"></span>Beta</label>
+            <label><input type="checkbox" value="nightly" checked /><span class="channel-dot nightly" aria-hidden="true"></span>Nightly</label>
+            <label><input type="checkbox" value="unknown" checked /><span class="channel-dot unknown" aria-hidden="true"></span>Unclassified</label>
+            <button id="no-report-channels" type="button" class="button" aria-pressed="false">Clear All</button>
+          </fieldset>
+        </div>
+        <p id="channel-filter-status" role="status" aria-live="polite" aria-atomic="true">Choose one or more channels. Double click to isolate one channel by itself.</p>
+      </section>
       <div id="notice" class="notice" hidden></div>
       <section id="explore-view" class="view" aria-labelledby="explore-title">
         <div class="section-intro">
@@ -169,35 +185,6 @@
             </div>
           </div>
           <div class="chart-controls chart-specific-controls">
-            <fieldset class="channel-set">
-              <legend class="sr-only">Included channels</legend>
-              <label
-                ><input type="checkbox" value="esr" checked /><span
-                  class="channel-dot esr"
-                ></span
-                >ESR</label
-              ><label
-                ><input type="checkbox" value="release" checked /><span
-                  class="channel-dot release"
-                ></span
-                >Release</label
-              ><label
-                ><input type="checkbox" value="beta" checked /><span
-                  class="channel-dot beta"
-                ></span
-                >Beta</label
-              ><label
-                ><input type="checkbox" value="nightly" checked /><span
-                  class="channel-dot nightly"
-                ></span
-                >Nightly</label
-              ><label class="unknown-channel"
-                ><input type="checkbox" value="unknown" checked /><span
-                  class="channel-dot unknown"
-                ></span
-                >Unclassified</label
-              >
-            </fieldset>
             <div class="display-controls">
               <label class="select-wrap"
                 ><span class="sr-only">Group installations by</span
@@ -364,6 +351,10 @@
               <option value="legacy">Historical · through May 2025</option>
             </select></label
           >
+        </div>
+        <div id="channel-empty-state" class="empty-state" hidden>
+          <h3>No channels selected</h3>
+          <p>Choose a channel or All channels above to show this report.</p>
         </div>
         <div id="secondary-content"></div>
       </section>

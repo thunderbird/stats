@@ -1,6 +1,57 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {formatPlatformLabel, groupPlatformRecords} from "../../docs/media/js/platform-model.mjs";
+import {formatPlatformLabel, groupPlatformRecords, selectChannelRecords} from "../../docs/media/js/platform-model.mjs";
+
+test("channel selection uses joint counts and preserves independently published overall labels", () => {
+  const records = [["2025-05-04", {count: 1000, versions: {en: 900, fr: 100},
+    coverage: {channels: {esr: 600, release: 350, other: 50}},
+    by_channel: {
+      esr: {count: 600, versions: {en: 550, __other__: 50}},
+      release: {count: 350, versions: {en: 300, __other__: 50}},
+      other: {count: 50, versions: {__other__: 50}},
+    }}]];
+  const original = structuredClone(records);
+  const release = selectChannelRecords(records, ["release"])[0][1];
+  assert.equal(release.count, 350);
+  assert.equal(release.total, 350);
+  assert.deepEqual(release.versions, {en: 300, __other__: 50});
+  assert.deepEqual(selectChannelRecords(records, ["esr", "release"])[0][1].versions,
+    {en: 850, __other__: 100});
+  assert.equal(selectChannelRecords(records, ["unknown"])[0][1].count, 50);
+  assert.equal(selectChannelRecords(records, ["beta"])[0][1].count, 0);
+  assert.equal(selectChannelRecords(records, ["beta"])[0][1].explicitZero, true);
+  assert.deepEqual(selectChannelRecords(records, ["esr", "release", "beta", "nightly", "unknown"]), records);
+  assert.deepEqual(selectChannelRecords(records), records);
+  assert.deepEqual(records, original);
+});
+
+test("missing channel distributions remain gaps and never fall back to overall counts", () => {
+  const records = [
+    ["2025-05-04", {count: 1000, versions: {en: 1000}}],
+    ["2025-05-11", {count: 1000, versions: {en: 1000},
+      coverage: {channels: {esr: 600, release: 400}},
+      by_channel: {esr: {count: 600, versions: {en: 600}}}}],
+  ];
+  for (const [, record] of selectChannelRecords(records, ["release"])) {
+    assert.equal(record.count, null);
+    assert.equal(record.total, null);
+    assert.equal(record.channelUnavailable, true);
+    assert.deepEqual(record.versions, {});
+  }
+  assert.deepEqual(selectChannelRecords(records), records);
+});
+
+test("platform family grouping operates on the selected channel and retains its denominator", () => {
+  const records = [["2025-05-04", {count: 1000,
+    versions: {"Darwin 24.3.0": 300, "Linux 6.8": 500, "Windows 11": 200},
+    by_channel: {
+      esr: {count: 600, versions: {"Linux 6.8": 400, "Windows 11": 200}},
+      release: {count: 400, versions: {"Darwin 24.3.0": 300, "Linux 6.8": 100}},
+    }}]];
+  const selected = groupPlatformRecords(selectChannelRecords(records, ["release"]));
+  assert.equal(selected[0][1].count, 400);
+  assert.deepEqual(selected[0][1].versions, {Darwin: 300, Linux: 100});
+});
 
 test("platform grouping sums macOS and Linux versions without changing populations or Windows detail", () => {
   const records = [["2026-09-27", {count: 100, total: 100, explicitZero: true, versions: {

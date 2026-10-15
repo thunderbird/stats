@@ -206,7 +206,7 @@ test('filtered histories never join unclassified legacy totals to a different ch
   ];
   const source = structuredClone(observations);
   for (const grouping of ['major', 'versions', 'channels', 'custom']) for (const mode of ['count', 'percent', 'lines']) {
-    const options = {grouping, mode, channels: ['esr', 'unknown'], combineReleaseVersions: false};
+    const options = {grouping, mode, channels: ['esr', 'unknown'], versionCutoff: 128, combineReleaseVersions: false};
     const filtered = buildSeries(observations, options);
     assert.equal(filtered.totals[0].value, null);
     assert.equal(filtered.totals[0].missing, true);
@@ -222,6 +222,7 @@ test('filtered histories never join unclassified legacy totals to a different ch
     assert.ok(full.totals.every(point => !point.missing && !point.note));
     const none = buildSeries(observations, {...options, channels: []});
     assert.deepEqual(none.totals.map(point => point.value), [0, 0, 0, 0]);
+    assert.deepEqual(none.series, []);
   }
   const unknown = buildSeries(observations, {channels: ['unknown']});
   assert.equal(unknown.totals[0].value, null);
@@ -497,7 +498,10 @@ test('Release buckets remain consistent when legacy versions gain recorded chann
 });
 
 test('duplicate group ids are made unique and empty channel selection cannot invent a population', () => {
-  const result = buildSeries(records.slice(0, 1), {grouping: 'custom', groups: [{id: 'duplicate'}, {id: 'duplicate'}], channels: []});
+  const options = {grouping: 'custom', groups: [{id: 'duplicate'}, {id: 'duplicate'}]};
+  const withChannels = buildSeries(records.slice(0, 1), options);
+  assert.equal(new Set(withChannels.series.map(series => series.id)).size, withChannels.series.length);
+  const result = buildSeries(records.slice(0, 1), {...options, channels: []});
   assert.equal(new Set(result.series.map(series => series.id)).size, result.series.length);
   assert.equal(result.totals[0].value, 0);
   assert.equal(result.series.every(series => series.values[0].percent === null), true);

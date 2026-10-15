@@ -20,12 +20,20 @@ SECTIONS = ("metrics", "baseline", "addons", "oauth")
 MIN_PUBLIC_CLIENTS = 100
 PUBLIC_CHANNELS = frozenset({"esr", "release", "beta", "nightly"})
 OTHER_LABEL = "__other__"
-PLATFORM_DETAIL_VERSION = 1
+PLATFORM_DETAIL_VERSION = 2
 PLATFORM_DESCRIPTION = (
     "Operating system version from each client's latest weekly baseline ping. "
     "Windows 10 and 11 use the reported build number; macOS reports Darwin "
     "kernel versions, and Linux reports kernel versions."
 )
+BASELINE_SOURCES = frozenset({"baseline", "baseline_clients_last_seen"})
+DERIVED_BASELINE_PROVENANCE = {
+    "source": f"{glean_sql.DATASET}.baseline_clients_last_seen",
+    "method": "Weekly reporting clients from the Sunday snapshot, using daily modal "
+              "dimensions from each client's latest reporting day in the week. "
+              "Historical Windows build numbers may be unavailable, so Windows 10 "
+              "and 11 are not inferred when the source cannot distinguish them.",
+}
 PRIVACY = {
     "minimum_label_clients": MIN_PUBLIC_CLIENTS,
     "suppressed_label": OTHER_LABEL,
@@ -200,7 +208,7 @@ def _public_counts(values, *, channels=False, versions=False):
         if not isinstance(key, str) or not key:
             raise ValueError("Invalid public Glean count label")
         if channels:
-            key = key.lower() if key.lower() in PUBLIC_CHANNELS else "other"
+            key = _public_channel(key)
         elif versions:
             match = re.fullmatch(r"([0-9]{1,4})(?:\.[0-9]{1,6})*(?:(?:a|b)[0-9]{1,4}|esr)?",
                                  key.lower())
@@ -216,6 +224,36 @@ def _public_counts(values, *, channels=False, versions=False):
             key = key if key == OTHER_LABEL or count >= MIN_PUBLIC_CLIENTS else OTHER_LABEL
         output[key] = output.get(key, 0) + count
     return output
+
+
+def _public_channel(channel):
+    if not isinstance(channel, str) or not channel:
+        raise ValueError("Invalid public Glean channel")
+    channel = channel.strip().lower()
+    return channel if channel in PUBLIC_CHANNELS else "other"
+
+
+def _sanitize_channel_distributions(record):
+    if "by_channel" not in record:
+        return
+    if not isinstance(record["by_channel"], dict):
+        raise ValueError("Invalid Glean channel distributions")
+    grouped = {}
+    for channel, detail in record["by_channel"].items():
+        channel = _public_channel(channel)
+        if not isinstance(detail, dict) or not isinstance(detail.get("versions"), dict):
+            raise ValueError("Invalid Glean channel distribution")
+        target = grouped.setdefault(channel, {"count": 0, "versions": {}})
+        target["count"] += _integer(detail.get("count"), "Glean channel population")
+        for label, count in detail["versions"].items():
+            if not isinstance(label, str) or not label:
+                raise ValueError("Invalid Glean channel distribution label")
+            target["versions"][label] = target["versions"].get(label, 0) + _integer(
+                count, "Glean channel distribution count",
+            )
+    for detail in grouped.values():
+        detail["versions"] = _public_counts(detail["versions"])
+    record["by_channel"] = grouped
 
 
 def _sanitize_coverage(record):
@@ -298,6 +336,7 @@ def sanitize_public(data):
                 raise ValueError("Invalid public Glean distribution record")
             if name != "addons" and "versions" in record:
                 record["versions"] = _public_counts(record["versions"])
+                _sanitize_channel_distributions(record)
             if name == "addons" and "top10" in record:
                 record["top10"] = {
                     key: count for key, count in record["top10"].items()
@@ -388,7 +427,9 @@ def _counts(rows, section):
     return result
 
 
-def baseline_records(rows):
+def baseline_records(rows, *, source="baseline"):
+    if source not in BASELINE_SOURCES:
+        raise ValueError("Unknown Glean baseline source")
     totals = [row for row in rows if row["section"] == "total"]
     if len(totals) != 1:
         raise ValueError("Baseline query must return one total")
@@ -396,6 +437,8 @@ def baseline_records(rows):
     if not total:
         raise ValueError("No Glean baseline clients in the reporting week")
     coverage = {section: _counts(rows, section) for section in ("channels", "versions")}
+    if any(sum(counts.values()) != total for counts in coverage.values()):
+        raise ValueError("Baseline coverage does not match the baseline population")
     records = {}
     for name in ("platforms", "locales"):
         counts = _counts(rows, name)
@@ -404,9 +447,34 @@ def baseline_records(rows):
         records[name] = {
             "count": total, "versions": _public_counts(counts),
             "coverage": copy.deepcopy(coverage),
+            "by_channel": _baseline_channel_records(rows, name, counts, coverage["channels"]),
         }
+        if source == "baseline_clients_last_seen":
+            records[name]["provenance"] = dict(DERIVED_BASELINE_PROVENANCE)
         _sanitize_coverage(records[name])
     return records
+
+
+def _baseline_channel_records(rows, name, marginal, channels):
+    grouped, combined, seen = {}, {}, set()
+    for row in rows:
+        if row["section"] != f"channel_{name}":
+            continue
+        raw_channel, label = row.get("channel"), row.get("key")
+        channel = _public_channel(raw_channel)
+        if not isinstance(label, str) or not label or (raw_channel, label) in seen:
+            raise ValueError(f"Invalid or duplicate {name} channel label")
+        seen.add((raw_channel, label))
+        count = _integer(row.get("count"), f"{name} channel count")
+        detail = grouped.setdefault(channel, {"count": 0, "versions": {}})
+        detail["count"] += count
+        detail["versions"][label] = detail["versions"].get(label, 0) + count
+        combined[label] = combined.get(label, 0) + count
+    if combined != marginal or {key: value["count"] for key, value in grouped.items()} != _public_counts(channels, channels=True):
+        raise ValueError(f"{name} channel distributions do not match baseline coverage")
+    for detail in grouped.values():
+        detail["versions"] = _public_counts(detail["versions"])
+    return grouped
 
 
 def metric_records(rows, supported):
@@ -612,6 +680,25 @@ def _validate_record(record, *, addon=False, distribution=False):
             _integer(value, "Glean coverage") for value in counts.values()
         ) != total:
             raise ValueError(f"Glean {name} coverage does not match its population")
+    if distribution and "by_channel" in record:
+        channels = record["by_channel"]
+        if not isinstance(channels, dict) or set(channels) != set(coverage["channels"]):
+            raise ValueError("Glean channel distributions do not match channel coverage")
+        for channel, detail in channels.items():
+            if channel not in PUBLIC_CHANNELS | {"other"} or not isinstance(detail, dict):
+                raise ValueError("Invalid Glean channel distribution")
+            population = _integer(detail.get("count"), "Glean channel population")
+            if population != coverage["channels"][channel]:
+                raise ValueError("Glean channel distribution population does not match coverage")
+            values = detail.get("versions")
+            if not isinstance(values, dict) or not values or any(
+                not isinstance(label, str) or not label
+                or (label != OTHER_LABEL and _integer(count, "Glean channel value") < MIN_PUBLIC_CLIENTS)
+                for label, count in values.items()
+            ):
+                raise ValueError("Invalid public Glean channel labels")
+            if sum(_integer(count, "Glean channel value") for count in values.values()) != population:
+                raise ValueError("Glean channel distribution does not sum to its population")
 
 
 def validate(data):
@@ -650,6 +737,17 @@ def validate(data):
         glean_sql.bounds(day)
         if not isinstance(sections, dict) or any(key not in SECTIONS for key in sections):
             raise ValueError("Invalid Glean weekly section coverage")
+        for section, detail in sections.items():
+            if not isinstance(detail, dict) or detail.get("status") != "unavailable":
+                continue
+            if section == "metrics":
+                section_groups = metrics.values()
+            elif section == "baseline":
+                section_groups = (data["platforms"], data["locales"])
+            else:
+                section_groups = (data.get(section, {}),)
+            if any(day in group.get("records", {}) for group in section_groups):
+                raise ValueError(f"Unavailable Glean {section} week has observations: {day}")
     result = {key: len(group["records"]) for key, group, _, _ in groups}
     if oauth is not None:
         result["oauth"] = len(oauth["records"])
@@ -658,6 +756,7 @@ def validate(data):
 
 def collect(
     existing, through, *, start=None, refresh_week=None, on_error=None, client=None, max_weeks=8,
+    baseline_source="baseline",
 ):
     """Fill missing weekly sections; failed refreshes retain their previous data.
 
@@ -666,18 +765,23 @@ def collect(
     """
     if isinstance(max_weeks, bool) or not isinstance(max_weeks, int) or max_weeks < 1:
         raise ValueError("Glean max_weeks must be a positive integer")
+    if baseline_source not in BASELINE_SOURCES:
+        raise ValueError("Unknown Glean baseline source")
     result = sanitize_public(existing or empty_data())
     validate(result)
     # OAuth is additive to schema 1: old snapshots remain valid archives and
     # acquire only the missing weekly section on the next collection run.
     result.setdefault("oauth", oauth_definition())
-    # Cached baseline queries grouped only by OS family. Retry just this
-    # section, preserving its old counts until a detailed query succeeds.
+    # Older baseline queries lack OS detail or channel-specific distributions.
+    # Retry just this section, preserving all counts until the query succeeds.
     result["platforms"]["description"] = PLATFORM_DESCRIPTION
     for day, sections in result["coverage"]["weeks"].items():
         baseline = sections.get("baseline")
-        if (baseline and day in result["platforms"]["records"]
-                and baseline.get("platform_detail") != PLATFORM_DETAIL_VERSION):
+        if (baseline and baseline.get("status") == "complete" and (
+            baseline.get("platform_detail") != PLATFORM_DETAIL_VERSION
+            or any("by_channel" not in result[name]["records"].get(day, {})
+                   for name in ("platforms", "locales"))
+        )):
             baseline["pending_platform_detail"] = True
     baseline_refresh = {
         day for day, sections in result["coverage"]["weeks"].items()
@@ -695,7 +799,7 @@ def collect(
             group["retired"] = True
     for sections in result["coverage"]["weeks"].values():
         coverage = sections.get("metrics")
-        if coverage is not None:
+        if coverage is not None and coverage.get("status") != "unavailable":
             known = set().union(*(coverage.get(key, []) for key in (
                 "observed", "unobserved", "unsupported",
             )))
@@ -752,7 +856,7 @@ def collect(
                     continue
                 try:
                     if section == "baseline":
-                        rows = client.query(glean_sql.baseline_query(day))
+                        rows = client.query(glean_sql.baseline_query(day, source=baseline_source))
                         if not rows or (len(rows) == 1 and rows[0].get("section") == "total"
                                         and _integer(rows[0].get("count"), "baseline total") == 0):
                             if any(key in result[name]["records"]
@@ -760,12 +864,14 @@ def collect(
                                 raise ValueError("Glean refresh lost baseline observations")
                             coverage[section] = {"status": "unobserved"}
                             continue
-                        records = baseline_records(rows)
+                        records = baseline_records(rows, source=baseline_source)
                         for record in records.values():
                             _validate_record(record, distribution=True)
                         for name, record in records.items():
                             result[name]["records"][key] = record
                         coverage[section] = {"status": "complete", "platform_detail": PLATFORM_DETAIL_VERSION}
+                        if baseline_source == "baseline_clients_last_seen":
+                            coverage[section]["source"] = baseline_source
                         baseline_refresh.discard(key)
                     elif section == "metrics":
                         rows = client.query(glean_sql.metric_query(day, metric_ids)) if metric_ids else []
@@ -791,7 +897,7 @@ def collect(
                             coverage[section] = {"status": "unsupported"}
                             continue
                         rows = client.query(glean_sql.oauth_query(day))
-                        if (len(rows) == 1 and rows[0].get("scope") == "all"
+                        if not rows or (len(rows) == 1 and rows[0].get("scope") == "all"
                                 and rows[0].get("section") == "summary"
                                 and _integer(rows[0].get("total"), "OAuth events") == 0
                                 and _integer(rows[0].get("count"), "OAuth population") == 0):
@@ -850,6 +956,6 @@ def check_freshness(data, through):
     if sections["metrics"].get("pending_definitions"):
         raise ValueError(f"Glean metric definitions have not been refreshed for {week}")
     if sections["baseline"].get("pending_platform_detail"):
-        raise ValueError(f"Glean operating system versions have not been refreshed for {week}")
+        raise ValueError(f"Glean operating system versions have not been refreshed for {week}, including channel distributions")
     if sections["baseline"].get("status") != "complete":
         raise ValueError(f"Glean has no baseline observations for {week}")

@@ -752,6 +752,55 @@ h1 {
 .channel-dot.nightly {
   background: var(--nightly);
 }
+.channel-filter {
+  margin-bottom: 22px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.channel-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.channel-filter h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.channel-filter .channel-set {
+  gap: 8px;
+  min-width: 0;
+}
+.channel-filter .channel-set label,
+.channel-filter .channel-set button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  gap: 8px;
+}
+.channel-filter .channel-set label:has(input:checked),
+.channel-filter .channel-set button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.channel-filter .channel-set label:hover,
+.channel-filter .channel-set button:hover {
+  border-color: var(--accent);
+}
+.channel-filter .channel-set input {
+  flex-shrink: 0;
+}
+.channel-filter p {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .unknown-channel {
   color: var(--text-muted);
 }

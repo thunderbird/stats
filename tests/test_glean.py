@@ -21,6 +21,10 @@ def baseline_rows():
         {"section": "locales", "key": "de", "count": 2},
         {"section": "channels", "key": "esr", "count": 8},
         {"section": "versions", "key": "140.4.0", "count": 8},
+        {"section": "channel_platforms", "channel": "esr", "key": "Windows", "count": 5},
+        {"section": "channel_platforms", "channel": "esr", "key": "Linux", "count": 3},
+        {"section": "channel_locales", "channel": "esr", "key": "en-US", "count": 6},
+        {"section": "channel_locales", "channel": "esr", "key": "de", "count": 2},
     ]
 
 
@@ -73,6 +77,7 @@ def test_collects_only_public_aggregates_with_explicit_populations():
     assert data["platforms"]["records"][str(WEEK)] == {
         "count": 8, "versions": {"__other__": 8},
         "coverage": {"channels": {"esr": 8}, "versions": {"other": 8}},
+        "by_channel": {"esr": {"count": 8, "versions": {"__other__": 8}}},
     }
     account = data["metrics"][METRIC]["records"][str(WEEK)]
     assert account["count"] == 4
@@ -111,6 +116,216 @@ def test_completed_weeks_need_no_network():
     client.query.assert_not_called()
 
 
+def channel_baseline_rows():
+    rows = [{"section": "total", "key": "", "count": 1000}]
+    for section, values in {
+        "platforms": {"Windows 11": 600, "Linux 6.8": 400},
+        "locales": {"en-US": 500, "de": 400, "fr": 100},
+        "channels": {"esr": 600, "release": 400},
+        "versions": {"140.4.0": 600, "153.0": 400},
+    }.items():
+        rows += [{"section": section, "key": key, "count": value}
+                 for key, value in values.items()]
+    for section, values in {
+        "platforms": {"esr": {"Windows 11": 500, "Linux 6.8": 100},
+                      "release": {"Windows 11": 100, "Linux 6.8": 300}},
+        "locales": {"esr": {"en-US": 400, "de": 150, "fr": 50},
+                    "release": {"en-US": 100, "de": 250, "fr": 50}},
+    }.items():
+        rows += [{"section": f"channel_{section}", "channel": channel,
+                  "key": key, "count": value}
+                 for channel, counts in values.items() for key, value in counts.items()]
+    return rows
+
+
+def test_baseline_retains_distinct_platform_and_language_distributions_per_channel():
+    records = glean.baseline_records(channel_baseline_rows())
+    assert records["platforms"]["by_channel"] == {
+        "esr": {"count": 600, "versions": {"Windows 11": 500, "Linux 6.8": 100}},
+        "release": {"count": 400, "versions": {"Windows 11": 100, "Linux 6.8": 300}},
+    }
+    assert records["locales"]["versions"] == {"en-US": 500, "de": 400, "fr": 100}
+    assert records["locales"]["by_channel"] == {
+        "esr": {"count": 600, "versions": {"en-US": 400, "de": 150, "__other__": 50}},
+        "release": {"count": 400, "versions": {"en-US": 100, "de": 250, "__other__": 50}},
+    }
+    for record in records.values():
+        glean._validate_record(record, distribution=True)
+
+
+@pytest.mark.parametrize("broken", ["missing", "duplicate", "wrong_channel", "wrong_label"])
+def test_baseline_rejects_inconsistent_joint_distributions(broken):
+    rows = channel_baseline_rows()
+    target = next(row for row in rows if row["section"] == "channel_platforms")
+    if broken == "missing":
+        rows.remove(target)
+    elif broken == "duplicate":
+        rows.append(dict(target))
+    elif broken == "wrong_channel":
+        target["channel"] = "beta"
+    else:
+        target["key"] = "Different OS"
+    with pytest.raises(ValueError, match="channel"):
+        glean.baseline_records(rows)
+
+
+def test_channel_sanitizer_removes_private_channels_labels_and_unexpected_detail_fields():
+    record = glean.baseline_records(channel_baseline_rows())["locales"]
+    record["coverage"]["channels"]["custom-channel.invalid"] = record["coverage"]["channels"].pop("release")
+    record["by_channel"]["custom-channel.invalid"] = record["by_channel"].pop("release")
+    for detail in record["by_channel"].values():
+        detail["versions"]["private-locale.invalid"] = detail["versions"].pop("__other__")
+        detail["client_id"] = "private-client.invalid"
+    source = {"locales": {"records": {str(WEEK): record}}}
+    safe = glean.sanitize_public(source)
+    public = safe["locales"]["records"][str(WEEK)]
+    assert set(public["by_channel"]) == {"esr", "other"}
+    assert public["by_channel"]["other"]["versions"] == {
+        "en-US": 100, "de": 250, "__other__": 50,
+    }
+    assert "private-" not in str(safe) and "custom-channel" not in str(safe)
+    assert "private-" in str(source)
+    assert glean.sanitize_public(safe) == safe
+    glean._validate_record(public, distribution=True)
+
+
+@pytest.mark.parametrize("broken", ["count", "distribution", "missing", "private_label"])
+def test_public_joint_distribution_validation_checks_populations_and_privacy(broken):
+    record = glean.baseline_records(channel_baseline_rows())["platforms"]
+    if broken == "count":
+        record["by_channel"]["esr"]["count"] += 1
+    elif broken == "distribution":
+        record["by_channel"]["esr"]["versions"]["Windows 11"] += 1
+    elif broken == "missing":
+        record["by_channel"].pop("release")
+    else:
+        record["by_channel"]["esr"]["versions"] = {"Windows 11": 550, "private-os": 50}
+    with pytest.raises(ValueError, match="channel"):
+        glean._validate_record(record, distribution=True)
+
+
+def test_missing_channel_details_reopens_baseline_only_and_failed_refresh_preserves_history():
+    source = collect()
+    for name in ("platforms", "locales"):
+        source[name]["records"][str(WEEK)].pop("by_channel")
+    original = copy.deepcopy(source)
+    glean.validate(source)  # Historical schema-1 records are still readable.
+    failed = glean.collect(source, THROUGH, start=WEEK, client=FixtureClient({"baseline"}),
+                           on_error=lambda *_: None)
+    assert failed["platforms"] == original["platforms"]
+    assert failed["locales"] == original["locales"]
+    assert failed["coverage"]["pending"] == [str(WEEK)]
+    client = FixtureClient()
+    recovered = glean.collect(failed, THROUGH, start=WEEK, client=client)
+    assert client.calls == ["baseline"]
+    assert recovered["platforms"]["records"][str(WEEK)]["by_channel"]
+    assert recovered["locales"]["records"][str(WEEK)]["by_channel"]
+    assert recovered["metrics"] == original["metrics"]
+    assert recovered["addons"] == original["addons"]
+    assert recovered["oauth"] == original["oauth"]
+    assert source == original
+
+
+def test_baseline_query_groups_channels_with_dimensions_after_selecting_latest_client_ping():
+    query = glean_sql.baseline_query(WEEK)
+    assert "(c.channel, c.platform), (c.channel, c.locale)" in query
+    assert "'channel_platforms'" in query and "'channel_locales'" in query
+    assert "LOWER(TRIM(channel)) IN ('esr', 'release', 'beta', 'nightly')" in query
+    assert "PARTITION BY client_info.client_id ORDER BY submission_timestamp DESC, document_id DESC" in query
+    assert "client_id" not in query[query.rindex("SELECT CASE"):]
+
+
+def test_baseline_channel_output_alias_cannot_shadow_source_grouping_column():
+    aggregate = glean_sql.baseline_query(WEEK).split("SELECT CASE", 1)[1]
+    assert "FROM classified AS c" in aggregate
+    assert "IF(GROUPING(c.channel) = 0, c.channel, '') AS channel" in aggregate
+    # BigQuery resolves an unqualified `channel` to the aggregate output alias.
+    # All grouping expressions must explicitly name the input relation.
+    assert set(re.findall(r"GROUPING\(([^)]+)\)", aggregate)) == {
+        "c.channel", "c.platform", "c.locale", "c.version",
+    }
+    grouping_sets = aggregate.split("GROUP BY GROUPING SETS", 1)[1]
+    assert not re.search(r"(?<![.\w])(channel|platform|locale|version)\b", grouping_sets)
+
+
+def test_derived_baseline_query_uses_weekly_snapshot_and_documents_daily_modes():
+    query = glean_sql.baseline_query(dt.date(2025, 5, 4), source="baseline_clients_last_seen")
+    assert "FROM `moz-fx-data-shared-prod.thunderbird_desktop.baseline_clients_last_seen`" in query
+    assert "submission_date = DATE('2025-05-04')" in query
+    assert "days_since_seen < 7" in query
+    assert "normalized_os_version" in query and "SAFE_CAST(windows_build_number AS INT64)" in query
+    # The normalized OS family changes Darwin to Mac, while the reported
+    # version remains the Darwin kernel version used by the platform chart.
+    assert "CASE normalized_os WHEN 'Mac' THEN 'Darwin'" in query
+    assert "ELSE 'Windows_NT10.0'" in query
+    assert "submission_timestamp" not in query
+    assert "client_id" not in query[query.rindex("SELECT CASE"):]
+    records = glean.baseline_records(channel_baseline_rows(), source="baseline_clients_last_seen")
+    for record in records.values():
+        assert record["provenance"] == glean.DERIVED_BASELINE_PROVENANCE
+        assert "daily modal" in record["provenance"]["method"]
+        glean._validate_record(record, distribution=True)
+
+
+def test_historical_baseline_source_only_changes_baseline_and_records_provenance():
+    client = FixtureClient()
+    original = client.query
+    queries = []
+
+    def query(sql):
+        queries.append(sql)
+        return baseline_rows() if ".baseline_clients_last_seen`" in sql else original(sql)
+
+    client.query = query
+    data = collect(client, baseline_source="baseline_clients_last_seen")
+    assert sum(".baseline_clients_last_seen`" in sql for sql in queries) == 1
+    assert not any(".baseline`" in sql for sql in queries)
+    assert data["platforms"]["records"][str(WEEK)]["provenance"] == glean.DERIVED_BASELINE_PROVENANCE
+    assert data["locales"]["records"][str(WEEK)]["provenance"] == glean.DERIVED_BASELINE_PROVENANCE
+    assert data["coverage"]["weeks"][str(WEEK)]["baseline"]["source"] == "baseline_clients_last_seen"
+    for name in ("metrics", "oauth", "addons"):
+        assert data[name] == collect()[name]
+
+
+def test_known_unavailable_metrics_are_not_reopened_for_new_definitions():
+    source = collect()
+    source["coverage"]["weeks"][str(WEEK)]["metrics"] = {
+        "status": "unavailable", "reason": "expired source partitions",
+    }
+    for group in source["metrics"].values():
+        group["records"].clear()
+    source["metrics"].pop("mail_mails_read")
+    client = Mock()
+    result = glean.collect(source, THROUGH, start=WEEK, client=client)
+    client.fields.assert_not_called()
+    assert result["coverage"]["weeks"][str(WEEK)]["metrics"] == source["coverage"]["weeks"][str(WEEK)]["metrics"]
+    assert "pending_definitions" not in result["coverage"]["weeks"][str(WEEK)]["metrics"]
+
+
+@pytest.mark.parametrize("section", ["metrics", "baseline", "addons", "oauth"])
+def test_unavailable_week_cannot_contain_numeric_observations(section):
+    source = collect(EventFixtureClient())
+    source["coverage"]["weeks"][str(WEEK)][section] = {
+        "status": "unavailable", "reason": "source_retention",
+    }
+    with pytest.raises(ValueError, match=f"Unavailable Glean {section} week has observations"):
+        glean.validate(source)
+    groups = (source["metrics"].values() if section == "metrics" else
+              (source["platforms"], source["locales"]) if section == "baseline" else
+              (source[section],))
+    for group in groups:
+        group["records"].pop(str(WEEK), None)
+    glean.validate(source)
+
+
+@pytest.mark.parametrize("source", ["custom.table", "baseline; DELETE FROM x"])
+def test_unknown_baseline_source_is_rejected(source):
+    with pytest.raises(ValueError, match="baseline source"):
+        glean_sql.baseline_query(WEEK, source=source)
+    with pytest.raises(ValueError, match="baseline source"):
+        collect(baseline_source=source)
+
+
 def test_os_family_cache_refreshes_only_baseline_and_retains_version_counts():
     source = collect()
     rows = baseline_rows()
@@ -120,10 +335,13 @@ def test_os_family_cache_refreshes_only_baseline_and_retains_version_counts():
         source[name]["records"][str(WEEK)] = record
     source["coverage"]["weeks"][str(WEEK)]["baseline"].pop("platform_detail")
     original = copy.deepcopy(source)
-    detailed = [row for row in rows if row["section"] != "platforms"] + [
+    detailed = [row for row in rows if row["section"] not in ("platforms", "channel_platforms")] + [
         {"section": "platforms", "key": "Windows 10", "count": 600},
         {"section": "platforms", "key": "Windows 11", "count": 400},
         {"section": "platforms", "key": "Linux 6.8", "count": 600},
+        {"section": "channel_platforms", "channel": "esr", "key": "Windows 10", "count": 600},
+        {"section": "channel_platforms", "channel": "esr", "key": "Windows 11", "count": 400},
+        {"section": "channel_platforms", "channel": "esr", "key": "Linux 6.8", "count": 600},
     ]
     client = FixtureClient()
     client.query = lambda sql: (client.calls.append("baseline") or detailed)
@@ -520,6 +738,21 @@ def test_unobserved_oauth_is_distinct_from_unsupported_and_cannot_erase_history(
     original = client.query
     client.query = lambda sql: ([{"scope": "all", "section": "summary", "count": 0, "total": 0}]
                                if "event.name = 'oauth2_authentication'" in sql else original(sql))
+    data = collect(client)
+    assert data["coverage"]["weeks"][str(WEEK)]["oauth"] == {"status": "unobserved"}
+    assert data["oauth"]["records"] == {}
+    observed = collect(EventFixtureClient())
+    errors = []
+    result = glean.collect(observed, THROUGH, start=WEEK, refresh_week=WEEK, client=client,
+                           on_error=lambda key, error: errors.append(str(error)))
+    assert result == observed and errors == ["Glean refresh lost OAuth observations"]
+
+
+def test_empty_oauth_results_are_unobserved_but_cannot_erase_history():
+    client = EventFixtureClient()
+    original = client.query
+    client.query = lambda sql: ([] if "event.name = 'oauth2_authentication'" in sql
+                                else original(sql))
     data = collect(client)
     assert data["coverage"]["weeks"][str(WEEK)]["oauth"] == {"status": "unobserved"}
     assert data["oauth"]["records"] == {}

@@ -347,6 +347,9 @@ export function buildSeries(records = [], options = {}, releases = []) {
   }
   if (currentReleaseMajor != null && entries.some(otherRelease))
     groups.push({id: 'other-release-versions', name: 'Other Release versions', otherRelease: true, color: '#bb7a45'});
+  // Clearing channels also clears fixed cutoff and custom groups, which would
+  // otherwise leave zero-valued series drawn in count and line views.
+  if (!selectedChannels.length) groups = [];
   // Expose every recorded category by default. An explicitly requested cap
   // includes its remainder, so an optional top-N view preserves the population.
   if (grouping === 'major' || grouping === 'versions') {

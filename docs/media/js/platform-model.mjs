@@ -12,6 +12,41 @@ const windowsVersions = {
   "10.0": "Windows 10 / 11",
 };
 
+const publicChannels = ["esr", "release", "beta", "nightly", "other"];
+
+export function selectChannelRecords(records, channels = publicChannels) {
+  const selected = new Set(channels.map(channel => channel === "unknown" ? "other" : channel)
+    .filter(channel => publicChannels.includes(channel)));
+  // Overall labels have their own publication threshold. Reconstructing them
+  // from independently suppressed channel labels would change the data.
+  if (publicChannels.every(channel => selected.has(channel))) return records;
+  return records.map(([date, record]) => {
+    const missing = () => [date, {...record, count: null, total: null, versions: {},
+      explicitZero: false, channelUnavailable: true}];
+    if (!record || (selected.size && !record.by_channel)) return missing();
+    const versions = {};
+    let count = 0;
+    for (const channel of selected) {
+      const detail = record.by_channel[channel];
+      // An absent channel with no observed population contributes zero. A
+      // recorded population without its joint distribution remains a gap.
+      if (!detail) {
+        if (record.coverage?.channels?.[channel] > 0) return missing();
+        continue;
+      }
+      if (!Number.isFinite(detail.count) || detail.count < 0 || !detail.versions)
+        return missing();
+      count += detail.count;
+      for (const [label, value] of Object.entries(detail.versions)) {
+        if (!Number.isFinite(value) || value < 0) return missing();
+        versions[label] = (versions[label] || 0) + value;
+      }
+    }
+    return [date, {...record, count, total: count, versions,
+      explicitZero: count === 0, channelUnavailable: false}];
+  });
+}
+
 export function groupPlatformRecords(records, {darwin = true, linux = true} = {}) {
   return records.map(([date, record]) => {
     const versions = {};
